@@ -61,7 +61,7 @@ export default function SuppliersPage() {
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-8">
       <div className="max-w-4xl mx-auto">
-        <Link href="/" className="text-sm text-zinc-500 hover:underline">← Home</Link>
+        <Link href="/dashboard" className="text-sm text-zinc-500 hover:underline">← Dashboard</Link>
         <div className="flex items-center justify-between mt-2 mb-6">
           <h1 className="text-3xl font-bold">Suppliers</h1>
           <button onClick={() => setEditing({ ...empty })} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium">

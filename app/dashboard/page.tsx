@@ -90,12 +90,13 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <Link href="/" className="text-sm text-zinc-500 hover:underline">← Home</Link>
+            <div className="text-xs font-mono uppercase tracking-widest text-pink-600 dark:text-pink-400">Beauty stock OS</div>
             <h1 className="text-3xl font-bold mt-1">Dashboard</h1>
           </div>
           <div className="flex gap-2">
             <Link href="/promos" className="text-sm px-3 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">Promos</Link>
             <Link href="/suppliers" className="text-sm px-3 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">Suppliers</Link>
+            <Link href="/settings" className="text-sm px-3 py-2 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800">Settings</Link>
             <button onClick={rerun} disabled={busy} className="bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white px-4 py-2 rounded text-sm font-medium">
               {busy ? "Running…" : "Re-run forecasts"}
             </button>
@@ -126,9 +127,16 @@ export default function Dashboard() {
         {loading ? (
           <div className="text-center py-12 text-zinc-500">Loading…</div>
         ) : visible.length === 0 ? (
-          <div className="text-center py-12 text-zinc-500">
-            {predictions.length === 0 ? "No forecasts yet. Run sync from the onboarding flow." : "Nothing here."}
-          </div>
+          predictions.length === 0 ? (
+            <div className="text-center py-12 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700">
+              <p className="text-zinc-500 mb-4">No forecasts yet — connect a shop and seed your catalog.</p>
+              <Link href="/settings" className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-medium text-sm">
+                Go to Settings
+              </Link>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-zinc-500">Nothing in this tab.</div>
+          )
         ) : tab === "urgent" ? (
           <div className="grid gap-3">
             {visible.map(p => <UrgentCard key={p.id} p={p} onApprove={approveOrder} onSkip={skipOrder} />)}
