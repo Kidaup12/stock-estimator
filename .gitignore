@@ -43,4 +43,10 @@ next-env.d.ts
 # sqlite write-ahead log only (commit the .db so Vercel reads have a DB; switch to Postgres for full prod use)
 prisma/dev.db-journal
 
+# design inspiration files (kept locally, not part of build)
+app inspo/
+app/(app)/
+app/login/
+app/showroom/
+
 .vercel

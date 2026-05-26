@@ -37,6 +37,10 @@
     "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "app inspo",
+    "app/(app)",
+    "app/login",
+    "app/showroom"
   ]
 }
