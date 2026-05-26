@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const schema = z.object({
+  id: z.string().optional(),
+  startDate: z.string(),
+  endDate: z.string(),
+  scope: z.enum(["all", "sku", "category", "brand"]),
+  scopeValue: z.string().optional().nullable(),
+  discountPct: z.number().min(0).max(100),
+  promoType: z.enum(["payday", "holiday", "flash", "gwp"]),
+  channel: z.enum(["shopify", "whatsapp", "instagram", "all"]),
+  notes: z.string().optional().nullable(),
+});
+
+export async function GET() {
+  const tenant = await prisma.tenant.findFirst();
+  if (!tenant) return NextResponse.json({ promos: [] });
+  const promos = await prisma.promo.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { startDate: "desc" },
+  });
+  return NextResponse.json({ promos });
+}
+
+export async function POST(req: NextRequest) {
+  const tenant = await prisma.tenant.findFirst();
+  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+
+  const body = await req.json();
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 });
+  const { id, startDate, endDate, ...rest } = parsed.data;
+
+  const data = {
+    ...rest,
+    startDate: new Date(startDate),
+    endDate: new Date(endDate),
+  };
+
+  const promo = id
+    ? await prisma.promo.update({ where: { id }, data })
+    : await prisma.promo.create({ data: { ...data, tenantId: tenant.id } });
+  return NextResponse.json({ promo });
+}
