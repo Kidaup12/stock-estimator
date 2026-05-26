@@ -11,6 +11,30 @@ type ShopInfo = {
   hasToken: boolean;
 } | null;
 
+type MonthlyContext = {
+  id?: string;
+  month: string;
+  marketingBudget: number | null;
+  promotions: string | null;
+  seasonalExpectation: string | null;
+  cashFlow: string | null;
+  notes: string | null;
+};
+
+function currentMonth(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+const emptyContext: MonthlyContext = {
+  month: currentMonth(),
+  marketingBudget: null,
+  promotions: "",
+  seasonalExpectation: "",
+  cashFlow: "",
+  notes: "",
+};
+
 export default function SettingsPage() {
   const [shop, setShop] = useState<ShopInfo>(null);
   const [form, setForm] = useState({
@@ -18,6 +42,9 @@ export default function SettingsPage() {
     shopifyDomain: "beautysquareke.co",
     shopifyAccessToken: "",
   });
+  const [context, setContext] = useState<MonthlyContext>(emptyContext);
+  const [savingContext, setSavingContext] = useState(false);
+  const [contextSaved, setContextSaved] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -29,15 +56,47 @@ export default function SettingsPage() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/shop");
-    const data = await res.json();
-    if (data) {
-      setShop(data);
-      setForm(f => ({ ...f, name: data.name, shopifyDomain: data.shopifyDomain }));
+    const [shopRes, ctxRes] = await Promise.all([
+      fetch("/api/shop").then(r => r.json()),
+      fetch("/api/monthly-context").then(r => r.json()),
+    ]);
+    if (shopRes) {
+      setShop(shopRes);
+      setForm(f => ({ ...f, name: shopRes.name, shopifyDomain: shopRes.shopifyDomain }));
     }
+    const cm = currentMonth();
+    const existing = ctxRes.contexts?.find((c: MonthlyContext) => c.month === cm);
+    setContext(existing || { ...emptyContext, month: cm });
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
+
+  async function saveContext() {
+    setSavingContext(true);
+    setContextSaved(null);
+    try {
+      const res = await fetch("/api/monthly-context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...context,
+          marketingBudget: context.marketingBudget,
+          promotions: context.promotions || null,
+          seasonalExpectation: context.seasonalExpectation || null,
+          cashFlow: context.cashFlow || null,
+          notes: context.notes || null,
+        }),
+      });
+      if (res.ok) {
+        setContextSaved("Saved. Re-run forecasts to apply this month's context.");
+      } else {
+        const err = await res.json();
+        setContextSaved(`Error: ${err.error || "save failed"}`);
+      }
+    } finally {
+      setSavingContext(false);
+    }
+  }
 
   function update<K extends keyof typeof form>(k: K, v: string) {
     setForm({ ...form, [k]: v });
@@ -126,7 +185,70 @@ export default function SettingsPage() {
           <h1 className="text-xl font-semibold tracking-tight mt-0.5">Settings</h1>
         </div>
 
+        <div className="card p-5 mb-4 bg-accent-50 border-accent-100">
+          <div className="text-2xs uppercase tracking-wider text-accent-700 font-semibold">What you input vs. what&apos;s automatic</div>
+          <ul className="text-sm text-ink-soft mt-3 space-y-1.5 leading-relaxed">
+            <li>· <strong>Automatic:</strong> daily catalogue + sales sync from Shopify, weekly forecast refresh (Mon 6am).</li>
+            <li>· <strong>You input monthly:</strong> the context form below (marketing spend, promos, cash flow, big events).</li>
+            <li>· <strong>You input occasionally:</strong> <Link href="/suppliers" className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href="/promos" className="text-accent-700 hover:underline">promo calendar</Link>, supplier-per-product on each product page.</li>
+            <li>· <strong>One-time:</strong> Shopify connection + initial catalogue seed below.</li>
+          </ul>
+        </div>
+
         <div className="space-y-4">
+          <Section
+            title={`Monthly context — ${context.month}`}
+            description="5-minute monthly form. Feeds Layer 2 of the forecast. Lock it in on the 1st of each month."
+          >
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field
+                label="Marketing budget (KES)"
+                value={context.marketingBudget?.toString() ?? ""}
+                onChange={v => setContext({ ...context, marketingBudget: v ? parseFloat(v) : null })}
+                placeholder="e.g. 150000"
+                type="number"
+              />
+              <SelectField
+                label="Cash flow expectation"
+                value={context.cashFlow || ""}
+                onChange={v => setContext({ ...context, cashFlow: v })}
+                options={["", "tight", "normal", "flush"]}
+              />
+              <div className="sm:col-span-2">
+                <TextAreaField
+                  label="Promotions planned this month"
+                  value={context.promotions || ""}
+                  onChange={v => setContext({ ...context, promotions: v })}
+                  placeholder="e.g. Mid-month WhatsApp drop 15% off fragrance; Madaraka sitewide 20%"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <TextAreaField
+                  label="Seasonal expectation"
+                  value={context.seasonalExpectation || ""}
+                  onChange={v => setContext({ ...context, seasonalExpectation: v })}
+                  placeholder="e.g. School holidays starting mid-month, expect lower foot traffic; Mother's Day boost on skincare"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <TextAreaField
+                  label="Notes & big events"
+                  value={context.notes || ""}
+                  onChange={v => setContext({ ...context, notes: v })}
+                  placeholder="e.g. New influencer partnership launch; competitor 20% off going on"
+                />
+              </div>
+            </div>
+            {contextSaved && (
+              <ResultBanner ok={!contextSaved.startsWith("Error")} message={contextSaved} />
+            )}
+            <div className="mt-5">
+              <button onClick={saveContext} disabled={savingContext} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+                {savingContext ? "Saving…" : "Save monthly context"}
+              </button>
+            </div>
+          </Section>
+
           <Section
             title="Shopify connection"
             description="Leave the access token blank to use mock mode (scrapes the public storefront)."
@@ -225,6 +347,40 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
         placeholder={placeholder}
         className="input"
       />
+    </label>
+  );
+}
+
+function TextAreaField({ label, value, onChange, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{label}</span>
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={2}
+        className="input resize-y min-h-[64px]"
+      />
+    </label>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[];
+}) {
+  return (
+    <label className="block">
+      <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{label}</span>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="input"
+      >
+        {options.map(o => <option key={o} value={o}>{o || "—"}</option>)}
+      </select>
     </label>
   );
 }
