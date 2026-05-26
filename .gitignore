@@ -50,3 +50,4 @@ app/login/
 app/showroom/
 
 .vercel
+fc.json
