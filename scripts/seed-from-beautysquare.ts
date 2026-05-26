@@ -59,6 +59,8 @@ export async function seed() {
       const sku = variant.sku || `BS-${p.id}-${variant.id}`;
       const imageUrl = p.images[0]?.src || null;
       const initialStock = Math.floor(20 + Math.random() * 80);
+      // Default cost factor 45-60% of retail; refined by /scripts/backfill-costs.ts once suppliers are assigned.
+      const cost = Math.round(price * (0.45 + Math.random() * 0.15));
 
       await prisma.product.upsert({
         where: {
@@ -73,6 +75,7 @@ export async function seed() {
           vendor: p.vendor || null,
           productType: p.product_type || null,
           priceKes: price,
+          costKes: cost,
           imageUrl,
           currentStock: initialStock,
         },

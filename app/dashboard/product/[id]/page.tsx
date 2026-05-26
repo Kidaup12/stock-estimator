@@ -13,6 +13,7 @@ type Detail = {
     vendor: string | null;
     productType: string | null;
     priceKes: number;
+    costKes: number;
     imageUrl: string | null;
     currentStock: number;
     abcCategory: string | null;
@@ -101,10 +102,19 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
             <div className="text-2xs uppercase tracking-wider text-mute">{product.vendor || "Unbranded"}</div>
             <h1 className="text-2xl font-semibold tracking-tight mt-1">{product.title}</h1>
             <div className="text-2xs text-mute mt-1 num">{product.sku}</div>
-            <div className="text-sm text-ink-soft mt-2 flex items-center gap-2">
+            <div className="text-sm text-ink-soft mt-2 flex items-center gap-2 flex-wrap">
               <span>{product.productType || "—"}</span>
               <span className="text-mute">·</span>
-              <span className="num">KES {KES(product.priceKes)}</span>
+              <span className="num">Retail KES {KES(product.priceKes)}</span>
+              {product.costKes > 0 && (
+                <>
+                  <span className="text-mute">·</span>
+                  <span className="num text-mute">Cost KES {KES(product.costKes)}</span>
+                  <span className="text-2xs font-semibold px-2 py-0.5 rounded-md bg-green-50 text-green-700 border border-green-200">
+                    {(((product.priceKes - product.costKes) / product.priceKes) * 100).toFixed(0)}% margin
+                  </span>
+                </>
+              )}
               {product.abcCategory && (
                 <>
                   <span className="text-mute">·</span>
@@ -175,7 +185,8 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
               <Row label="Reorder point" value={`${prediction.reorderPoint.toFixed(0)} units`} bold />
               <Row
                 label="Recommended order qty"
-                value={`${prediction.recommendedQty.toFixed(0)} units · KES ${KES(prediction.recommendedQty * product.priceKes)}`}
+                value={`${prediction.recommendedQty.toFixed(0)} units`}
+                hint={`Cost to supplier: KES ${KES(prediction.recommendedQty * product.costKes)} · expected revenue: KES ${KES(prediction.recommendedQty * product.priceKes)}`}
                 bold
                 accent
               />

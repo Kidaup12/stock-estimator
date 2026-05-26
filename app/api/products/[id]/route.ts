@@ -48,6 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       vendor: product.vendor,
       productType: product.productType,
       priceKes: product.priceKes,
+      costKes: product.costKes,
       imageUrl: product.imageUrl,
       currentStock: product.currentStock,
       abcCategory: product.abcCategory,

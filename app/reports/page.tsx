@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
-type Monthly = { month: string; quantity: number; revenueKes: number };
-type Slice = { name: string; revenue: number; qty: number; count: number };
-type SupplierSlice = { name: string; revenue: number; stockValue: number; count: number; leadAvg: number; country: string | null };
+type Monthly = { month: string; quantity: number; revenueKes: number; cogsKes: number; grossProfitKes: number };
+type Slice = { name: string; revenue: number; cogs: number; grossProfit: number; marginPct: number; qty: number; count: number };
+type SupplierSlice = { name: string; revenue: number; stockCost: number; stockRetail: number; stockValue: number; count: number; leadAvg: number; country: string | null };
 type Mover = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; revenue30: number; qty30: number; stock: number };
-type Slow = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; stock: number; stockValue: number };
+type Slow = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; stock: number; stockValue: number; stockRetail: number };
 
 type ReportsData = {
   monthly: Monthly[];
@@ -17,7 +17,10 @@ type ReportsData = {
   topMovers: Mover[];
   slowMovers: Slow[];
   abcCounts: { A: number; B: number; C: number };
-  lostSalesKes: number;
+  lostRevenueKes: number;
+  lostMarginKes: number;
+  totalStockCost: number;
+  totalStockRetail: number;
 };
 
 const KES = (n: number) => n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
@@ -45,10 +48,14 @@ export default function ReportsPage() {
   const maxCategoryRev = Math.max(1, ...data.byCategory.map(c => c.revenue));
   const maxBrandRev = Math.max(1, ...data.byBrand.map(b => b.revenue));
   const totalAbc = data.abcCounts.A + data.abcCounts.B + data.abcCounts.C;
-  const totalSupplierExposure = data.bySupplier.reduce((s, x) => s + x.stockValue, 0);
+  const totalSupplierExposure = data.bySupplier.reduce((s, x) => s + x.stockCost, 0);
 
-  const last30Rev = data.monthly.slice(-1)[0]?.revenueKes ?? 0;
-  const prev30Rev = data.monthly.slice(-2, -1)[0]?.revenueKes ?? 0;
+  const last30 = data.monthly.slice(-1)[0];
+  const prev30 = data.monthly.slice(-2, -1)[0];
+  const last30Rev = last30?.revenueKes ?? 0;
+  const last30Margin = last30?.grossProfitKes ?? 0;
+  const last30MarginPct = last30Rev > 0 ? (last30Margin / last30Rev) : 0;
+  const prev30Rev = prev30?.revenueKes ?? 0;
   const mom = prev30Rev > 0 ? ((last30Rev - prev30Rev) / prev30Rev) * 100 : 0;
 
   return (
@@ -72,30 +79,38 @@ export default function ReportsPage() {
         </div>
 
         {/* KPI strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft">
           <Kpi label="Last month revenue" value={`KES ${KESshort(last30Rev)}`} hint={`${mom >= 0 ? "+" : ""}${mom.toFixed(1)}% MoM`} tone={mom < 0 ? "warn" : "default"} />
-          <Kpi label="Estimated lost sales" value={`KES ${KESshort(data.lostSalesKes)}`} hint="If critical SKUs stock out 7d" tone={data.lostSalesKes > 100000 ? "warn" : "default"} />
-          <Kpi label="Supplier exposure" value={`KES ${KESshort(totalSupplierExposure)}`} hint="Stock value across all suppliers" />
-          <Kpi label="ABC mix" value={`${data.abcCounts.A} A · ${data.abcCounts.B} B · ${data.abcCounts.C} C`} hint={`${((data.abcCounts.A / Math.max(1, totalAbc)) * 100).toFixed(0)}% drive 70% revenue`} />
+          <Kpi label="Gross profit (last month)" value={`KES ${KESshort(last30Margin)}`} hint={`${(last30MarginPct * 100).toFixed(0)}% margin`} />
+          <Kpi label="Capital tied up" value={`KES ${KESshort(data.totalStockCost)}`} hint={`Inventory at cost · KES ${KESshort(data.totalStockRetail)} at retail`} />
+          <Kpi label="Lost margin (next 7d)" value={`KES ${KESshort(data.lostMarginKes)}`} hint={`Revenue at risk KES ${KESshort(data.lostRevenueKes)}`} tone={data.lostMarginKes > 50000 ? "warn" : "default"} />
+          <Kpi label="ABC mix" value={`${data.abcCounts.A} · ${data.abcCounts.B} · ${data.abcCounts.C}`} hint={`A SKUs drive 70% of revenue`} />
         </div>
 
-        {/* Monthly revenue (line-ish bar) */}
+        {/* Monthly revenue + gross profit stacked */}
         <section className="card p-5">
           <div className="flex items-end justify-between mb-4">
             <div>
               <div className="text-2xs uppercase tracking-wider text-mute">12 months</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue trend</h2>
+              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue &amp; gross profit</h2>
             </div>
-            <div className="text-2xs text-mute">KES</div>
+            <div className="flex items-center gap-3 text-2xs">
+              <Legend color="#7a68e2" label="Cost of goods" />
+              <Legend color="#15803d" label="Gross profit" />
+            </div>
           </div>
           <div className="flex items-end gap-1.5 h-40">
             {data.monthly.slice(-12).map(m => {
-              const h = (m.revenueKes / maxMonthRev) * 100;
+              const totalH = (m.revenueKes / maxMonthRev) * 100;
+              const costShare = m.revenueKes > 0 ? (m.cogsKes / m.revenueKes) : 0;
               return (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5" title={`${m.month}: KES ${KES(m.revenueKes)} (${m.quantity.toFixed(0)} units)`}>
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5" title={`${m.month}: KES ${KES(m.revenueKes)} rev · KES ${KES(m.grossProfitKes)} margin (${m.revenueKes > 0 ? ((m.grossProfitKes/m.revenueKes)*100).toFixed(0) : 0}%)`}>
                   <div className="text-[10px] text-mute num">{KESshort(m.revenueKes)}</div>
                   <div className="flex-1 w-full flex items-end">
-                    <div className="w-full rounded-t bg-accent-500 hover:bg-accent-600 transition" style={{ height: `${h}%` }} />
+                    <div className="w-full rounded-t overflow-hidden flex flex-col-reverse" style={{ height: `${totalH}%` }}>
+                      <div style={{ height: `${costShare * 100}%`, background: "#7a68e2" }} />
+                      <div style={{ height: `${(1 - costShare) * 100}%`, background: "#15803d" }} />
+                    </div>
                   </div>
                   <div className="text-[10px] text-mute num">{m.month.slice(5)}</div>
                 </div>
@@ -118,7 +133,7 @@ export default function ReportsPage() {
                   label={c.name}
                   pct={(c.revenue / maxCategoryRev) * 100}
                   value={`KES ${KESshort(c.revenue)}`}
-                  hint={`${c.count} SKUs`}
+                  hint={`${(c.marginPct * 100).toFixed(0)}% margin · ${c.count} SKUs`}
                   color={PALETTE[i % PALETTE.length]}
                 />
               ))}
@@ -137,7 +152,7 @@ export default function ReportsPage() {
                   label={b.name}
                   pct={(b.revenue / maxBrandRev) * 100}
                   value={`KES ${KESshort(b.revenue)}`}
-                  hint={`${b.count} SKUs`}
+                  hint={`${(b.marginPct * 100).toFixed(0)}% margin · ${b.count} SKUs`}
                   color={PALETTE[i % PALETTE.length]}
                 />
               ))}
@@ -147,17 +162,20 @@ export default function ReportsPage() {
 
         {/* Suppliers exposure */}
         <section className="card p-5">
-          <div className="mb-4">
-            <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up by origin</div>
-            <h2 className="text-base font-semibold tracking-tight mt-0.5">Supplier exposure</h2>
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up by origin (at cost)</div>
+              <h2 className="text-base font-semibold tracking-tight mt-0.5">Supplier exposure</h2>
+            </div>
+            <div className="text-2xs text-mute">Sum at cost: <span className="num text-ink-soft">KES {KESshort(totalSupplierExposure)}</span></div>
           </div>
           <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
             {data.bySupplier.map((s, i) => (
               <BarRow
                 key={s.name}
                 label={`${s.name}`}
-                pct={(s.stockValue / Math.max(1, totalSupplierExposure)) * 100}
-                value={`KES ${KESshort(s.stockValue)}`}
+                pct={(s.stockCost / Math.max(1, totalSupplierExposure)) * 100}
+                value={`KES ${KESshort(s.stockCost)}`}
                 hint={`${s.count} SKUs · ${s.country || "—"} · lead ${s.leadAvg}d`}
                 color={PALETTE[i % PALETTE.length]}
               />
@@ -193,12 +211,12 @@ export default function ReportsPage() {
 
           <section className="card overflow-hidden">
             <div className="px-5 pt-5 pb-4">
-              <div className="text-2xs uppercase tracking-wider text-mute">No sales 90d</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Top 10 dead stock by KES</h2>
+              <div className="text-2xs uppercase tracking-wider text-mute">No sales 90d · at cost</div>
+              <h2 className="text-base font-semibold tracking-tight mt-0.5">Top 10 dead stock by capital tied up</h2>
             </div>
             <table className="w-full text-sm">
               <thead className="text-left text-2xs uppercase tracking-wider text-mute bg-canvas">
-                <tr><th className="px-5 py-2 font-medium">Product</th><th className="px-5 py-2 font-medium text-right">Stock</th><th className="px-5 py-2 font-medium text-right">Tied up</th></tr>
+                <tr><th className="px-5 py-2 font-medium">Product</th><th className="px-5 py-2 font-medium text-right">Stock</th><th className="px-5 py-2 font-medium text-right">Capital tied up</th></tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {data.slowMovers.map(s => (
@@ -228,6 +246,15 @@ function Kpi({ label, value, hint, tone = "default" }: { label: string; value: s
       <div className={`text-2xl font-semibold mt-2 num tracking-tight ${c}`}>{value}</div>
       {hint && <div className="text-2xs text-mute mt-1">{hint}</div>}
     </div>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-mute">
+      <span className="w-3 h-3 rounded-sm" style={{ background: color }} />
+      <span>{label}</span>
+    </span>
   );
 }
 

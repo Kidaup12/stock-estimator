@@ -15,6 +15,7 @@ type Prediction = {
     vendor: string | null;
     productType: string | null;
     priceKes: number;
+    costKes: number;
     imageUrl: string | null;
     currentStock: number;
     abcCategory: string | null;
@@ -33,15 +34,23 @@ type Prediction = {
   sales30Revenue: number;
   sales90Qty: number;
   sales90Revenue: number;
-  stockValueKes: number;
+  stockValueKes: number; // at cost
+  stockRetailKes: number;
+  reorderCostKes: number;
+  reorderRevenueKes: number;
 };
 
 type Summary = {
   productCount: number;
   revenue30: number;
+  cogs30: number;
+  grossProfit30: number;
+  grossMarginPct: number;
   revenue90: number;
-  deadStockKes: number;
+  deadStockKes: number; // at cost
+  deadStockRetailKes: number;
   activeStockKes: number;
+  activeStockRetailKes: number;
 } | null;
 
 type MonthlyRow = { month: string; quantity: number; revenueKes: number };
@@ -110,10 +119,13 @@ export default function Dashboard() {
 
   const visible = tab === "reorder" ? reorder : tab === "stockout" ? stockout : tab === "dead" ? dead : all;
 
-  const reorderValueKes = reorder.reduce((s, p) => s + p.recommendedQty * p.product.priceKes, 0);
-  const stockoutValueKes = stockout.reduce((s, p) => s + p.recommendedQty * p.product.priceKes, 0);
-  const deadValueKes = summary?.deadStockKes ?? 0;
+  const reorderCostKes = reorder.reduce((s, p) => s + p.reorderCostKes, 0);
+  const reorderRevenueKes = reorder.reduce((s, p) => s + p.reorderRevenueKes, 0);
+  const stockoutCostKes = stockout.reduce((s, p) => s + p.reorderCostKes, 0);
+  const deadCostKes = summary?.deadStockKes ?? 0;
+  const deadRetailKes = summary?.deadStockRetailKes ?? 0;
   const revenue30 = summary?.revenue30 ?? 0;
+  const grossMarginPct = summary?.grossMarginPct ?? 0;
 
   // Chart max for monthly bars
   const maxMonthlyRev = Math.max(1, ...monthly.map(m => m.revenueKes));
@@ -148,11 +160,11 @@ export default function Dashboard() {
 
         {/* KPI bar */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft mb-6">
-          <Kpi label="Products tracked" value={predictions.length.toString()} hint="Active catalogue" />
-          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint="Trailing 30 days" />
+          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint={`${(grossMarginPct * 100).toFixed(0)}% gross margin`} />
           <Kpi label="Stockouts" value={stockout.length.toString()} hint="At or near zero" tone={stockout.length > 0 ? "alarm" : "default"} />
-          <Kpi label="Reorders needed" value={reorder.length.toString()} hint={`KES ${KESshort(reorderValueKes)} to order`} tone={reorder.length > 0 ? "warn" : "default"} />
-          <Kpi label="Dead stock value" value={`KES ${KESshort(deadValueKes)}`} hint={`${dead.length} SKUs not sold in 90d`} tone={deadValueKes > 200000 ? "warn" : "default"} />
+          <Kpi label="Reorders needed" value={reorder.length.toString()} hint={`KES ${KESshort(reorderCostKes)} to pay suppliers`} tone={reorder.length > 0 ? "warn" : "default"} />
+          <Kpi label="Capital tied up in dead stock" value={`KES ${KESshort(deadCostKes)}`} hint={`${dead.length} SKUs · ${KESshort(deadRetailKes)} at retail`} tone={deadCostKes > 200000 ? "warn" : "default"} />
+          <Kpi label="Products tracked" value={predictions.length.toString()} hint="Active catalogue" />
         </div>
 
         {/* Monthly revenue chart */}
@@ -220,14 +232,19 @@ export default function Dashboard() {
             {visible.map(p => <ReorderCard key={p.id} p={p} variant={tab === "stockout" ? "stockout" : "reorder"} />)}
           </div>
         ) : tab === "dead" ? (
-          <DeadStockTable predictions={visible} totalKes={deadValueKes} />
+          <DeadStockTable predictions={visible} totalCostKes={deadCostKes} totalRetailKes={deadRetailKes} />
         ) : (
           <AllTable predictions={visible} />
         )}
 
         {tab === "stockout" && stockout.length > 0 && (
           <div className="mt-4 text-2xs text-mute">
-            Stockout column shows products at or within 3 days of zero stock. KES {KESshort(stockoutValueKes)} of urgent order value.
+            Stockout = at zero or within 3 days. Reorder cost to suppliers: KES {KESshort(stockoutCostKes)}.
+          </div>
+        )}
+        {tab === "reorder" && reorder.length > 0 && (
+          <div className="mt-4 text-2xs text-mute">
+            Reorder zone = 3–30 days of stock left. Pay suppliers KES {KESshort(reorderCostKes)}, expected sell-through revenue KES {KESshort(reorderRevenueKes)}.
           </div>
         )}
       </div>
@@ -292,7 +309,12 @@ function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stoc
             <Mini label="Stock" value={p.product.currentStock.toFixed(0)} tone={p.product.currentStock <= 0 ? "bad" : undefined} />
             <Mini label="Days left" value={`${p.daysUntilStockout}d`} tone={p.daysUntilStockout < 7 ? "bad" : "default"} />
             <Mini label="30d forecast" value={p.finalForecast30d.toFixed(0)} />
-            <Mini label="Reorder qty" value={`${p.recommendedQty.toFixed(0)} · KES ${KESshort(p.recommendedQty * p.product.priceKes)}`} tone="accent" />
+            <Mini
+              label="Reorder qty"
+              value={`${p.recommendedQty.toFixed(0)}`}
+              sub={`Cost KES ${KESshort(p.reorderCostKes)} → revenue KES ${KESshort(p.reorderRevenueKes)}`}
+              tone="accent"
+            />
           </div>
 
           {p.signals.length > 0 && (
@@ -310,24 +332,30 @@ function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stoc
   );
 }
 
-function Mini({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "bad" | "accent" }) {
+function Mini({ label, value, sub, tone = "default" }: { label: string; value: string; sub?: string; tone?: "default" | "bad" | "accent" }) {
   const v = tone === "bad" ? "text-status-bad" : tone === "accent" ? "text-accent-700" : "";
   return (
     <div>
       <div className="text-2xs text-mute uppercase tracking-wider">{label}</div>
       <div className={`font-semibold num mt-0.5 ${v}`}>{value}</div>
+      {sub && <div className="text-2xs text-mute num mt-0.5">{sub}</div>}
     </div>
   );
 }
 
-function DeadStockTable({ predictions, totalKes }: { predictions: Prediction[]; totalKes: number }) {
+function DeadStockTable({ predictions, totalCostKes, totalRetailKes }: { predictions: Prediction[]; totalCostKes: number; totalRetailKes: number }) {
   return (
     <>
-      <div className="card p-5 mb-4 flex items-center justify-between">
+      <div className="card p-5 mb-4 grid grid-cols-2 gap-6">
         <div>
-          <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up</div>
-          <div className="text-2xl font-semibold mt-1 num text-status-warn">KES {KES(totalKes)}</div>
-          <p className="text-2xs text-mute mt-1">{predictions.length} SKUs with zero sales in last 90 days. Consider clearance, bundling, or returning to supplier.</p>
+          <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up (cost)</div>
+          <div className="text-2xl font-semibold mt-1 num text-status-warn">KES {KES(totalCostKes)}</div>
+          <p className="text-2xs text-mute mt-1">{predictions.length} SKUs · zero sales in 90d. This is what you actually paid suppliers — the money that&apos;s not earning a return.</p>
+        </div>
+        <div>
+          <div className="text-2xs uppercase tracking-wider text-mute">At retail (if sold full price)</div>
+          <div className="text-2xl font-semibold mt-1 num text-ink-soft">KES {KES(totalRetailKes)}</div>
+          <p className="text-2xs text-mute mt-1">Realistic recovery is lower — clearance discounts typically 30–50% off retail.</p>
         </div>
       </div>
       <div className="card overflow-hidden">
@@ -339,8 +367,9 @@ function DeadStockTable({ predictions, totalKes }: { predictions: Prediction[]; 
                 <th className="px-5 py-3 font-medium">Brand</th>
                 <th className="px-5 py-3 font-medium">Type</th>
                 <th className="px-5 py-3 font-medium text-right">Stock</th>
-                <th className="px-5 py-3 font-medium text-right">Price</th>
-                <th className="px-5 py-3 font-medium text-right">Tied up</th>
+                <th className="px-5 py-3 font-medium text-right">Cost / unit</th>
+                <th className="px-5 py-3 font-medium text-right">Capital tied up</th>
+                <th className="px-5 py-3 font-medium text-right">At retail</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -353,8 +382,9 @@ function DeadStockTable({ predictions, totalKes }: { predictions: Prediction[]; 
                   <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>
                   <td className="px-5 py-3 text-ink-soft text-2xs">{p.product.productType || "—"}</td>
                   <td className="px-5 py-3 text-right num">{p.product.currentStock.toFixed(0)}</td>
-                  <td className="px-5 py-3 text-right num">KES {KES(p.product.priceKes)}</td>
+                  <td className="px-5 py-3 text-right num text-ink-soft">KES {KES(p.product.costKes)}</td>
                   <td className="px-5 py-3 text-right num font-semibold text-status-warn">KES {KES(p.stockValueKes)}</td>
+                  <td className="px-5 py-3 text-right num text-ink-soft">KES {KES(p.stockRetailKes)}</td>
                 </tr>
               ))}
             </tbody>

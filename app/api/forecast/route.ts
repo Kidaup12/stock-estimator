@@ -51,25 +51,43 @@ export async function GET() {
     .map(([month, v]) => ({ month, quantity: v.quantity, revenueKes: v.revenueKes }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  let deadStockKes = 0;
-  let activeStockKes = 0;
+  let deadStockCostKes = 0;
+  let deadStockRetailKes = 0;
+  let activeStockCostKes = 0;
+  let activeStockRetailKes = 0;
   let revenue30 = 0;
+  let cogs30 = 0; // cost of goods sold (last 30 days)
   for (const p of predictions) {
     const s90 = sales90Map.get(p.productId)?.qty ?? 0;
     const s30 = sales30Map.get(p.productId);
     revenue30 += s30?.rev ?? 0;
-    const stockValue = p.product.currentStock * p.product.priceKes;
-    if (s90 === 0 && p.product.currentStock > 0) deadStockKes += stockValue;
-    else activeStockKes += stockValue;
+    cogs30 += (s30?.qty ?? 0) * p.product.costKes;
+    const retailStock = p.product.currentStock * p.product.priceKes;
+    const costStock = p.product.currentStock * p.product.costKes;
+    if (s90 === 0 && p.product.currentStock > 0) {
+      deadStockCostKes += costStock;
+      deadStockRetailKes += retailStock;
+    } else {
+      activeStockCostKes += costStock;
+      activeStockRetailKes += retailStock;
+    }
   }
+  const grossMargin30 = revenue30 > 0 ? (revenue30 - cogs30) / revenue30 : 0;
 
   return NextResponse.json({
     summary: {
       productCount: predictions.length,
       revenue30,
+      cogs30,
+      grossProfit30: revenue30 - cogs30,
+      grossMarginPct: grossMargin30,
       revenue90: sales90.reduce((s, x) => s + (x._sum.revenueKes ?? 0), 0),
-      deadStockKes,
-      activeStockKes,
+      // Capital tied up (at cost) — what the shop actually paid suppliers.
+      deadStockKes: deadStockCostKes,
+      activeStockKes: activeStockCostKes,
+      // Retail equivalents — what the inventory would sell for.
+      deadStockRetailKes,
+      activeStockRetailKes,
     },
     monthlyRevenue,
     predictions: predictions.map(p => {
@@ -85,6 +103,7 @@ export async function GET() {
           vendor: p.product.vendor,
           productType: p.product.productType,
           priceKes: p.product.priceKes,
+          costKes: p.product.costKes,
           imageUrl: p.product.imageUrl,
           currentStock: p.product.currentStock,
           abcCategory: p.product.abcCategory,
@@ -106,7 +125,10 @@ export async function GET() {
         sales30Revenue: s30?.rev ?? 0,
         sales90Qty: s90?.qty ?? 0,
         sales90Revenue: s90?.rev ?? 0,
-        stockValueKes: p.product.currentStock * p.product.priceKes,
+        stockValueKes: p.product.currentStock * p.product.costKes, // capital tied up at cost
+        stockRetailKes: p.product.currentStock * p.product.priceKes, // potential revenue
+        reorderCostKes: p.recommendedQty * p.product.costKes,
+        reorderRevenueKes: p.recommendedQty * p.product.priceKes,
       };
     }),
   });

@@ -34,6 +34,7 @@ model Product {
   vendor            String?
   productType       String?
   priceKes          Float    @default(0)
+  costKes           Float    @default(0)
   imageUrl          String?
   currentStock      Float    @default(0)
   abcCategory       String?
