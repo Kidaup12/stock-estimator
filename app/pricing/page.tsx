@@ -77,7 +77,7 @@ export default function PricingPage() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-baseline gap-2.5">
             <div className="h-6 w-6 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
-            <span className="text-base font-semibold tracking-tight">Beauty Stock OS</span>
+            <span className="text-base font-semibold tracking-tight">Wezesha Restock OS</span>
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Pricing</span>
           </Link>
           <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">

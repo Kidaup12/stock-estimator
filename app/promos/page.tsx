@@ -82,7 +82,7 @@ export default function PromosPage() {
           </Link>
           <div className="flex items-baseline gap-2.5">
             <div className="h-5 w-5 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
-            <span className="text-sm font-semibold tracking-tight">Beauty Stock OS</span>
+            <span className="text-sm font-semibold tracking-tight">Wezesha Restock OS</span>
           </div>
         </div>
       </header>
