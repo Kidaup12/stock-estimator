@@ -16,11 +16,14 @@ function poissonSample(lambda: number): number {
 }
 
 function rankToBaseRate(rank: number, total: number): number {
+  // Calibrated for ~6M KES/month aggregate across 1020 SKUs at avg KES 2k price.
+  // Long tail intentionally goes near-zero so dead stock emerges naturally.
   const pct = rank / total;
-  if (pct < 0.05) return 4 + Math.random() * 4;
-  if (pct < 0.20) return 1.5 + Math.random() * 2;
-  if (pct < 0.50) return 0.3 + Math.random() * 0.8;
-  return 0.05 + Math.random() * 0.25;
+  if (pct < 0.05) return 0.35 + Math.random() * 0.35;
+  if (pct < 0.20) return 0.12 + Math.random() * 0.18;
+  if (pct < 0.50) return 0.025 + Math.random() * 0.065;
+  if (pct < 0.80) return 0.005 + Math.random() * 0.02;
+  return Math.random() < 0.5 ? 0 : 0.001 + Math.random() * 0.008;
 }
 
 export async function synth() {
@@ -102,9 +105,30 @@ export async function synth() {
       _sum: { quantity: true },
     });
     const dailyRate = (recent._sum.quantity ?? 0) / 30;
+    const expected30 = Math.max(1, dailyRate * 30);
+
+    // Tune currentStock to produce a realistic mix:
+    // - some near-stockout (drives reorder + stockout tabs)
+    // - some dead stock (catalogue tail with zero sales but units on shelf)
+    // - majority comfortable
+    let stock: number;
+    if (dailyRate === 0) {
+      // Dead stock candidate — units sitting on shelf, no movement.
+      stock = Math.random() < 0.6 ? Math.floor(8 + Math.random() * 40) : Math.floor(Math.random() * 6);
+    } else {
+      const r = Math.random();
+      if (r < 0.10) {
+        stock = Math.floor(expected30 * (0.03 + Math.random() * 0.25));
+      } else if (r < 0.30) {
+        stock = Math.floor(expected30 * (0.4 + Math.random() * 0.6));
+      } else {
+        stock = Math.floor(expected30 * (1.6 + Math.random() * 3));
+      }
+    }
+
     await prisma.product.update({
       where: { id: p.id },
-      data: { dailySalesRate: dailyRate },
+      data: { dailySalesRate: dailyRate, currentStock: Math.max(0, stock) },
     });
   }
 

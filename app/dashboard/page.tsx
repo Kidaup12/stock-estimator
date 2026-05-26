@@ -29,23 +29,48 @@ type Prediction = {
   confidence: number;
   urgency: "critical" | "high" | "medium" | "low";
   signals: Signal[];
-  latestOrder: { id: string; status: string } | null;
+  sales30Qty: number;
+  sales30Revenue: number;
+  sales90Qty: number;
+  sales90Revenue: number;
+  stockValueKes: number;
 };
 
+type Summary = {
+  productCount: number;
+  revenue30: number;
+  revenue90: number;
+  deadStockKes: number;
+  activeStockKes: number;
+} | null;
+
+type MonthlyRow = { month: string; quantity: number; revenueKes: number };
+
 const KES = (n: number) => n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
+const KESshort = (n: number) => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+  return n.toFixed(0);
+};
+
+type Tab = "reorder" | "stockout" | "dead" | "all";
 
 export default function Dashboard() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
+  const [summary, setSummary] = useState<Summary>(null);
+  const [monthly, setMonthly] = useState<MonthlyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<"urgent" | "review" | "all">("urgent");
+  const [tab, setTab] = useState<Tab>("reorder");
 
   async function load() {
     setLoading(true);
     const res = await fetch("/api/forecast");
     const data = await res.json();
     setPredictions(data.predictions || []);
+    setSummary(data.summary || null);
+    setMonthly(data.monthlyRevenue || []);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -57,33 +82,41 @@ export default function Dashboard() {
     setBusy(false);
   }
 
-  async function approveOrder(orderId: string) {
-    await fetch(`/api/orders/${orderId}/approve`, { method: "POST" });
-    await load();
-  }
-  async function skipOrder(orderId: string) {
-    await fetch(`/api/orders/${orderId}/skip`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "manual skip" }),
-    });
-    await load();
-  }
-
   const filtered = predictions.filter(p =>
     p.product.title.toLowerCase().includes(search.toLowerCase()) ||
     p.product.sku.toLowerCase().includes(search.toLowerCase()) ||
     (p.product.vendor ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const urgent = filtered.filter(p => p.urgency === "critical" || p.urgency === "high");
-  const review = filtered.filter(p => p.urgency === "medium");
-  const all = filtered;
+  // tab buckets
+  const stockout = filtered
+    .filter(p => p.product.currentStock <= 0 || p.daysUntilStockout < 3)
+    .sort((a, b) => a.daysUntilStockout - b.daysUntilStockout);
 
-  const visible = tab === "urgent" ? urgent : tab === "review" ? review : all;
+  const reorder = filtered
+    .filter(p =>
+      p.recommendedQty > 0 &&
+      p.product.currentStock > 0 &&
+      p.daysUntilStockout >= 3 &&
+      p.daysUntilStockout < 30
+    )
+    .sort((a, b) => a.daysUntilStockout - b.daysUntilStockout);
 
-  const totalRecKes = urgent.reduce((s, p) => s + p.recommendedQty * p.product.priceKes, 0);
-  const lowStock = predictions.filter(p => p.product.currentStock < 10).length;
+  const dead = filtered
+    .filter(p => p.sales90Qty === 0 && p.product.currentStock > 0)
+    .sort((a, b) => b.stockValueKes - a.stockValueKes);
+
+  const all = [...filtered].sort((a, b) => b.sales30Revenue - a.sales30Revenue);
+
+  const visible = tab === "reorder" ? reorder : tab === "stockout" ? stockout : tab === "dead" ? dead : all;
+
+  const reorderValueKes = reorder.reduce((s, p) => s + p.recommendedQty * p.product.priceKes, 0);
+  const stockoutValueKes = stockout.reduce((s, p) => s + p.recommendedQty * p.product.priceKes, 0);
+  const deadValueKes = summary?.deadStockKes ?? 0;
+  const revenue30 = summary?.revenue30 ?? 0;
+
+  // Chart max for monthly bars
+  const maxMonthlyRev = Math.max(1, ...monthly.map(m => m.revenueKes));
 
   return (
     <main className="min-h-screen bg-canvas">
@@ -97,6 +130,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <Link href="/promos" className="btn-ghost">Promos</Link>
             <Link href="/suppliers" className="btn-ghost">Suppliers</Link>
+            <Link href="/pricing" className="btn-ghost">Pricing</Link>
             <Link href="/settings" className="btn-ghost">Settings</Link>
             <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
               {busy ? "Running…" : "Re-run forecasts"}
@@ -108,21 +142,54 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-7">
         <div className="mb-7">
           <div className="text-2xs uppercase tracking-wider text-mute">Beauty Square KE</div>
-          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Today&apos;s reorder queue</h1>
+          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Today&apos;s replenishment view</h1>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft mb-6">
-          <Kpi label="Products tracked" value={predictions.length.toString()} hint="Across the catalogue" />
-          <Kpi label="Urgent reorders" value={urgent.length.toString()} hint="Critical or high priority" tone={urgent.length > 0 ? "alarm" : "default"} />
-          <Kpi label="Low stock (<10)" value={lowStock.toString()} hint="Below the soft floor" tone={lowStock > 0 ? "warn" : "default"} />
-          <Kpi label="Urgent order value" value={`KES ${KES(totalRecKes)}`} hint="If approved today" />
+        {/* KPI bar */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft mb-6">
+          <Kpi label="Products tracked" value={predictions.length.toString()} hint="Active catalogue" />
+          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint="Trailing 30 days" />
+          <Kpi label="Stockouts" value={stockout.length.toString()} hint="At or near zero" tone={stockout.length > 0 ? "alarm" : "default"} />
+          <Kpi label="Reorders needed" value={reorder.length.toString()} hint={`KES ${KESshort(reorderValueKes)} to order`} tone={reorder.length > 0 ? "warn" : "default"} />
+          <Kpi label="Dead stock value" value={`KES ${KESshort(deadValueKes)}`} hint={`${dead.length} SKUs not sold in 90d`} tone={deadValueKes > 200000 ? "warn" : "default"} />
         </div>
 
+        {/* Monthly revenue chart */}
+        {monthly.length > 0 && (
+          <section className="card p-5 mb-6">
+            <div className="flex items-end justify-between mb-4">
+              <div>
+                <div className="text-2xs uppercase tracking-wider text-mute">Last 12 months</div>
+                <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue trend</h2>
+              </div>
+              <div className="text-2xs text-mute">KES</div>
+            </div>
+            <div className="flex items-end gap-1.5 h-32">
+              {monthly.slice(-12).map(m => {
+                const h = (m.revenueKes / maxMonthlyRev) * 100;
+                return (
+                  <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
+                    <div className="flex-1 w-full flex items-end">
+                      <div
+                        className="w-full rounded-t bg-accent-500 group-hover:bg-accent-600 transition"
+                        style={{ height: `${h}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-mute num">{m.month.slice(5)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Tabs */}
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
           <div className="inline-flex rounded-xl border border-line bg-canvas-raised p-0.5 shadow-soft">
-            <TabBtn active={tab === "urgent"} onClick={() => setTab("urgent")} label="Urgent" count={urgent.length} />
-            <TabBtn active={tab === "review"} onClick={() => setTab("review")} label="Review" count={review.length} />
-            <TabBtn active={tab === "all"}    onClick={() => setTab("all")}    label="All"    count={all.length} />
+            <TabBtn active={tab === "reorder"} onClick={() => setTab("reorder")} label="Reorder" count={reorder.length} />
+            <TabBtn active={tab === "stockout"} onClick={() => setTab("stockout")} label="Stockout" count={stockout.length} />
+            <TabBtn active={tab === "dead"} onClick={() => setTab("dead")} label="Dead stock" count={dead.length} />
+            <TabBtn active={tab === "all"} onClick={() => setTab("all")} label="All" count={all.length} />
           </div>
           <input
             type="search"
@@ -147,12 +214,20 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-14 text-mute text-sm">Nothing in this tab.</div>
           )
-        ) : tab === "urgent" ? (
+        ) : tab === "reorder" || tab === "stockout" ? (
           <div className="grid gap-3">
-            {visible.map(p => <UrgentCard key={p.id} p={p} onApprove={approveOrder} onSkip={skipOrder} />)}
+            {visible.map(p => <ReorderCard key={p.id} p={p} variant={tab === "stockout" ? "stockout" : "reorder"} />)}
           </div>
+        ) : tab === "dead" ? (
+          <DeadStockTable predictions={visible} totalKes={deadValueKes} />
         ) : (
-          <ProductTable predictions={visible} />
+          <AllTable predictions={visible} />
+        )}
+
+        {tab === "stockout" && stockout.length > 0 && (
+          <div className="mt-4 text-2xs text-mute">
+            Stockout column shows products at or within 3 days of zero stock. KES {KESshort(stockoutValueKes)} of urgent order value.
+          </div>
         )}
       </div>
     </main>
@@ -181,51 +256,46 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
       }`}
     >
       <span>{label}</span>
-      <span className={`text-2xs num ${active ? "text-white/70" : "text-mute"}`}>{count}</span>
+      <span className={`text-2xs num px-1.5 py-0.5 rounded ${active ? "bg-white/20" : "bg-canvas-tint text-mute"}`}>{count}</span>
     </button>
   );
 }
 
-function UrgentCard({ p, onApprove, onSkip }: { p: Prediction; onApprove: (id: string) => void; onSkip: (id: string) => void }) {
-  const isCrit = p.urgency === "critical";
-  const accent = isCrit
-    ? "border-status-bad/25 bg-status-bad/[0.03]"
-    : "border-status-warn/25 bg-status-warn/[0.03]";
-  const pillTone = isCrit
-    ? "bg-status-bad/10 text-status-bad"
-    : "bg-status-warn/10 text-status-warn";
-
+function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stockout" }) {
+  const isOut = variant === "stockout";
+  const borderTone = isOut ? "border-status-bad/40 bg-red-50/40" : "border-status-warn/40 bg-amber-50/40";
   return (
-    <div className={`rounded-2xl border ${accent} p-5 shadow-soft`}>
-      <div className="flex gap-4">
+    <Link
+      href={`/dashboard/product/${p.product.id}`}
+      className={`card hover:shadow-lift transition border ${borderTone} block`}
+    >
+      <div className="p-4 sm:p-5 flex gap-4">
         {p.product.imageUrl && (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={p.product.imageUrl} alt={p.product.title} className="w-20 h-20 rounded-xl object-cover flex-shrink-0 border border-line" />
+          <img src={p.product.imageUrl} alt={p.product.title} className="w-16 h-16 rounded-xl object-cover border border-line flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Link href={`/dashboard/product/${p.product.id}`} className="font-medium hover:underline block truncate">
-                {p.product.title}
-              </Link>
-              <div className="text-2xs text-mute mt-1 num">
-                {p.product.sku} · {p.product.vendor || "—"} · {p.product.productType || "—"}
-              </div>
+              <div className="font-medium truncate">{p.product.title}</div>
+              <div className="text-2xs text-mute mt-0.5 num">{p.product.sku} · {p.product.vendor || "—"} · {p.product.productType || "—"}</div>
             </div>
-            <span className={`text-2xs font-semibold uppercase tracking-wider px-2 py-1 rounded-md ${pillTone}`}>
-              {p.urgency}
+            <span className={`text-2xs uppercase font-semibold tracking-wider px-2 py-1 rounded-md ${
+              isOut ? "bg-status-bad text-white" : "bg-status-warn text-white"
+            }`}>
+              {isOut ? "Stockout" : p.urgency}
             </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 mt-4">
-            <Field label="Stock" value={p.product.currentStock.toFixed(0)} />
-            <Field label="Days left" value={`${p.daysUntilStockout}d`} tone={p.daysUntilStockout < 7 ? "bad" : "default"} />
-            <Field label="30d forecast" value={p.finalForecast30d.toFixed(0)} />
-            <Field label="Recommend" value={`${p.recommendedQty.toFixed(0)} u`} tone="accent" />
+          <div className="grid grid-cols-4 gap-3 mt-3 text-sm">
+            <Mini label="Stock" value={p.product.currentStock.toFixed(0)} tone={p.product.currentStock <= 0 ? "bad" : undefined} />
+            <Mini label="Days left" value={`${p.daysUntilStockout}d`} tone={p.daysUntilStockout < 7 ? "bad" : "default"} />
+            <Mini label="30d forecast" value={p.finalForecast30d.toFixed(0)} />
+            <Mini label="Reorder qty" value={`${p.recommendedQty.toFixed(0)} · KES ${KESshort(p.recommendedQty * p.product.priceKes)}`} tone="accent" />
           </div>
 
           {p.signals.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {p.signals.map((s, i) => (
                 <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
                   {s.emoji} {s.label}
@@ -233,40 +303,68 @@ function UrgentCard({ p, onApprove, onSkip }: { p: Prediction; onApprove: (id: s
               ))}
             </div>
           )}
-
-          {p.latestOrder && p.latestOrder.status === "pending" && (
-            <div className="mt-5 flex gap-2">
-              <button onClick={() => onApprove(p.latestOrder!.id)} className="btn-accent">
-                Approve · KES {KES(p.recommendedQty * p.product.priceKes)}
-              </button>
-              <button onClick={() => onSkip(p.latestOrder!.id)} className="btn-ghost">
-                Skip
-              </button>
-            </div>
-          )}
-          {p.latestOrder && p.latestOrder.status === "approved" && (
-            <div className="mt-5 text-2xs uppercase tracking-wider text-status-ok font-medium">✓ Approved · mock draft PO created</div>
-          )}
-          {p.latestOrder && p.latestOrder.status === "skipped" && (
-            <div className="mt-5 text-2xs uppercase tracking-wider text-mute">Skipped</div>
-          )}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
-function Field({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "bad" | "accent" }) {
-  const c = tone === "bad" ? "text-status-bad" : tone === "accent" ? "text-accent-700" : "text-ink";
+function Mini({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "bad" | "accent" }) {
+  const v = tone === "bad" ? "text-status-bad" : tone === "accent" ? "text-accent-700" : "";
   return (
     <div>
-      <div className="text-2xs uppercase tracking-wider text-mute">{label}</div>
-      <div className={`text-sm font-semibold num mt-1 ${c}`}>{value}</div>
+      <div className="text-2xs text-mute uppercase tracking-wider">{label}</div>
+      <div className={`font-semibold num mt-0.5 ${v}`}>{value}</div>
     </div>
   );
 }
 
-function ProductTable({ predictions }: { predictions: Prediction[] }) {
+function DeadStockTable({ predictions, totalKes }: { predictions: Prediction[]; totalKes: number }) {
+  return (
+    <>
+      <div className="card p-5 mb-4 flex items-center justify-between">
+        <div>
+          <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up</div>
+          <div className="text-2xl font-semibold mt-1 num text-status-warn">KES {KES(totalKes)}</div>
+          <p className="text-2xs text-mute mt-1">{predictions.length} SKUs with zero sales in last 90 days. Consider clearance, bundling, or returning to supplier.</p>
+        </div>
+      </div>
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-2xs uppercase tracking-wider text-mute bg-canvas">
+              <tr>
+                <th className="px-5 py-3 font-medium">Product</th>
+                <th className="px-5 py-3 font-medium">Brand</th>
+                <th className="px-5 py-3 font-medium">Type</th>
+                <th className="px-5 py-3 font-medium text-right">Stock</th>
+                <th className="px-5 py-3 font-medium text-right">Price</th>
+                <th className="px-5 py-3 font-medium text-right">Tied up</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {predictions.map(p => (
+                <tr key={p.id} className="hover:bg-canvas">
+                  <td className="px-5 py-3">
+                    <Link href={`/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
+                    <div className="text-2xs text-mute num">{p.product.sku}</div>
+                  </td>
+                  <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>
+                  <td className="px-5 py-3 text-ink-soft text-2xs">{p.product.productType || "—"}</td>
+                  <td className="px-5 py-3 text-right num">{p.product.currentStock.toFixed(0)}</td>
+                  <td className="px-5 py-3 text-right num">KES {KES(p.product.priceKes)}</td>
+                  <td className="px-5 py-3 text-right num font-semibold text-status-warn">KES {KES(p.stockValueKes)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AllTable({ predictions }: { predictions: Prediction[] }) {
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
@@ -279,7 +377,7 @@ function ProductTable({ predictions }: { predictions: Prediction[] }) {
               <th className="px-5 py-3 font-medium text-center">ABC</th>
               <th className="px-5 py-3 font-medium text-right">Stock</th>
               <th className="px-5 py-3 font-medium text-right">Days</th>
-              <th className="px-5 py-3 font-medium text-right">30d fcst</th>
+              <th className="px-5 py-3 font-medium text-right">30d rev</th>
               <th className="px-5 py-3 font-medium text-right">Reorder</th>
             </tr>
           </thead>
@@ -288,31 +386,26 @@ function ProductTable({ predictions }: { predictions: Prediction[] }) {
               <tr key={p.id} className="hover:bg-canvas">
                 <td className="px-5 py-3">
                   <Link href={`/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
-                  <div className="text-2xs text-mute num mt-0.5">{p.product.sku}</div>
+                  <div className="text-2xs text-mute num">{p.product.sku}</div>
                 </td>
                 <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>
-                <td className="px-5 py-3 text-mute text-xs">{p.product.productType || "—"}</td>
+                <td className="px-5 py-3 text-ink-soft text-2xs">{p.product.productType || "—"}</td>
                 <td className="px-5 py-3 text-center">
-                  <AbcPill code={p.product.abcCategory} />
+                  <span className={`text-2xs font-semibold px-2 py-0.5 rounded-md border ${
+                    p.product.abcCategory === "A" ? "bg-green-50 text-green-700 border-green-200" :
+                    p.product.abcCategory === "B" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                    "bg-canvas-tint text-ink-soft border-line"
+                  }`}>{p.product.abcCategory || "C"}</span>
                 </td>
-                <td className={`px-5 py-3 text-right num font-medium ${p.product.currentStock < 10 ? "text-status-bad" : ""}`}>{p.product.currentStock.toFixed(0)}</td>
-                <td className={`px-5 py-3 text-right num ${p.daysUntilStockout < 14 ? "text-status-bad font-medium" : ""}`}>{p.daysUntilStockout}</td>
-                <td className="px-5 py-3 text-right num">{p.finalForecast30d.toFixed(0)}</td>
-                <td className="px-5 py-3 text-right num font-semibold text-accent-700">{p.recommendedQty.toFixed(0)}</td>
+                <td className={`px-5 py-3 text-right num ${p.product.currentStock < 5 ? "text-status-bad font-semibold" : ""}`}>{p.product.currentStock.toFixed(0)}</td>
+                <td className={`px-5 py-3 text-right num ${p.daysUntilStockout < 14 ? "text-status-bad font-semibold" : ""}`}>{p.daysUntilStockout}</td>
+                <td className="px-5 py-3 text-right num">KES {KESshort(p.sales30Revenue)}</td>
+                <td className="px-5 py-3 text-right num font-semibold text-accent-700">{p.recommendedQty > 0 ? p.recommendedQty.toFixed(0) : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
     </div>
-  );
-}
-
-function AbcPill({ code }: { code: string | null }) {
-  const c = code === "A" ? "bg-status-ok/10 text-status-ok"
-          : code === "B" ? "bg-accent-100 text-accent-700"
-          : "bg-canvas-tint text-mute";
-  return (
-    <span className={`text-2xs font-semibold px-2 py-0.5 rounded-md ${c}`}>{code || "C"}</span>
   );
 }
