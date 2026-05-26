@@ -1,0 +1,5 @@
+app inspo/
+app/(app)/
+app/login/
+app/showroom/
+prisma/dev.db-journal

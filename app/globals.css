@@ -50,12 +50,12 @@
 
 @layer components {
   .card { @apply bg-canvas-raised rounded-2xl border border-line shadow-soft; }
-  .kpi  { @apply card p-4 sm:p-5; }
+  .kpi  { @apply bg-canvas-raised rounded-2xl border border-line shadow-soft p-4 sm:p-5; }
 
   .btn         { @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium transition min-h-[40px]; }
-  .btn-primary { @apply btn bg-ink text-white hover:bg-ink-deep active:bg-ink-deep; }
-  .btn-ghost   { @apply btn text-ink hover:bg-canvas-tint active:bg-canvas-tint border border-line bg-canvas-raised; }
-  .btn-accent  { @apply btn bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-700 shadow-soft; }
+  .btn-primary { @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium transition min-h-[40px] bg-ink text-white hover:bg-ink-deep active:bg-ink-deep; }
+  .btn-ghost   { @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium transition min-h-[40px] text-ink hover:bg-canvas-tint active:bg-canvas-tint border border-line bg-canvas-raised; }
+  .btn-accent  { @apply inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium transition min-h-[40px] bg-accent-600 text-white hover:bg-accent-700 active:bg-accent-700 shadow-soft; }
 
   .input {
     @apply w-full rounded-xl border border-line px-3.5 py-2.5 text-sm bg-white

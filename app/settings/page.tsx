@@ -107,75 +107,86 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950 p-8">
-      <div className="max-w-3xl mx-auto">
-        <Link href="/dashboard" className="text-sm text-zinc-500 hover:underline">← Dashboard</Link>
-        <h1 className="text-3xl font-bold mt-2 mb-8">Settings</h1>
-
-        <Section title="Shopify connection" description="Leave the access token blank to use mock mode (scrapes the public storefront).">
-          <div className="grid gap-4">
-            <Field label="Shop name" value={form.name} onChange={v => update("name", v)} />
-            <Field label="Shopify domain" value={form.shopifyDomain} onChange={v => update("shopifyDomain", v)} placeholder="yourshop.co or yourshop.myshopify.com" />
-            <Field label="Admin API access token (optional)" value={form.shopifyAccessToken} onChange={v => update("shopifyAccessToken", v)} placeholder="shpat_…" type="password" />
+    <main className="min-h-screen bg-canvas">
+      <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
+          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+            ← Dashboard
+          </Link>
+          <div className="flex items-baseline gap-2.5">
+            <div className="h-5 w-5 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
+            <span className="text-sm font-semibold tracking-tight">Beauty Stock OS</span>
           </div>
-          {testResult && (
-            <div className={`mt-4 p-3 rounded text-sm ${testResult.ok ? "bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200" : "bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200"}`}>
-              {testResult.message}
-            </div>
-          )}
-          <div className="mt-4 flex gap-2">
-            <button onClick={testConnection} disabled={testing || !form.shopifyDomain} className="border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-4 py-2 rounded text-sm font-medium disabled:opacity-50">
-              {testing ? "Testing…" : "Test connection"}
-            </button>
-            <button onClick={saveShop} disabled={saving || !form.shopifyDomain || !form.name} className="bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white px-4 py-2 rounded text-sm font-medium">
-              {saving ? "Saving…" : shop ? "Update" : "Save"}
-            </button>
-          </div>
-          {shop && (
-            <div className="mt-3 text-xs text-zinc-500">
-              Connected as <span className="font-mono">{shop.shopifyDomain}</span> · {shop.currency} · {shop.hasToken ? "with token" : "mock mode"}
-            </div>
-          )}
-        </Section>
+        </div>
+      </header>
 
-        <Section title="Catalog & sales data" description="Pulls products and generates synthetic sales history calibrated to Kenya patterns (payday weeks, V-Day, Jamhuri, Christmas, Eid).">
-          <div className="grid gap-3">
-            <button onClick={runSeed} disabled={seeding || !shop} className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white font-semibold py-3 rounded transition">
-              {seeding ? "Seeding catalog (30–60s)…" : "Seed / Resync catalog"}
-            </button>
-            {seedResult && (
-              <div className={`p-3 rounded text-sm ${seedResult.startsWith("Error") ? "bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200" : "bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200"}`}>
-                {seedResult}
+      <div className="max-w-3xl mx-auto px-5 sm:px-8 py-7">
+        <div className="mb-7">
+          <div className="text-2xs uppercase tracking-wider text-mute">Configuration</div>
+          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Settings</h1>
+        </div>
+
+        <div className="space-y-4">
+          <Section
+            title="Shopify connection"
+            description="Leave the access token blank to use mock mode (scrapes the public storefront)."
+          >
+            <div className="grid gap-4">
+              <Field label="Shop name" value={form.name} onChange={v => update("name", v)} />
+              <Field label="Shopify domain" value={form.shopifyDomain} onChange={v => update("shopifyDomain", v)} placeholder="yourshop.co or yourshop.myshopify.com" />
+              <Field label="Admin API access token (optional)" value={form.shopifyAccessToken} onChange={v => update("shopifyAccessToken", v)} placeholder="shpat_…" type="password" />
+            </div>
+            {testResult && (
+              <ResultBanner ok={!!testResult.ok} message={testResult.message} />
+            )}
+            <div className="mt-5 flex gap-2 flex-wrap">
+              <button onClick={testConnection} disabled={testing || !form.shopifyDomain} className="btn-ghost disabled:opacity-50">
+                {testing ? "Testing…" : "Test connection"}
+              </button>
+              <button onClick={saveShop} disabled={saving || !form.shopifyDomain || !form.name} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+                {saving ? "Saving…" : shop ? "Update" : "Save"}
+              </button>
+            </div>
+            {shop && (
+              <div className="mt-4 text-2xs text-mute">
+                Connected as <span className="num text-ink-soft">{shop.shopifyDomain}</span> · {shop.currency} · {shop.hasToken ? "with token" : "mock mode"}
               </div>
             )}
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Forecasts" description="Runs Layer 1 (SARIMA mock) + Layer 2 (XGBoost mock) on every product. Recomputes safety stock and reorder points.">
-          <div className="grid gap-3">
-            <button onClick={runForecast} disabled={forecasting || !shop} className="w-full bg-pink-600 hover:bg-pink-700 disabled:bg-zinc-400 text-white font-semibold py-3 rounded transition">
+          <Section
+            title="Catalogue & sales data"
+            description="Pulls products and generates synthetic sales history calibrated to Kenya patterns (payday weeks, V-Day, Jamhuri, Christmas, Eid)."
+          >
+            <button onClick={runSeed} disabled={seeding || !shop} className="btn-primary w-full disabled:bg-mute disabled:hover:bg-mute">
+              {seeding ? "Seeding catalogue (30–60s)…" : "Seed / Resync catalogue"}
+            </button>
+            {seedResult && (
+              <ResultBanner ok={!seedResult.startsWith("Error")} message={seedResult} />
+            )}
+          </Section>
+
+          <Section
+            title="Forecasts"
+            description="Runs Layer 1 (SARIMA mock) + Layer 2 (XGBoost mock) on every product. Recomputes safety stock and reorder points."
+          >
+            <button onClick={runForecast} disabled={forecasting || !shop} className="btn-accent w-full disabled:bg-mute disabled:hover:bg-mute">
               {forecasting ? "Running forecasts…" : "Generate / Re-run forecasts"}
             </button>
             {forecastResult && (
-              <div className={`p-3 rounded text-sm ${forecastResult.startsWith("Error") ? "bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200" : "bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200"}`}>
-                {forecastResult}
-              </div>
+              <ResultBanner ok={!forecastResult.startsWith("Error")} message={forecastResult} />
             )}
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Other settings">
-          <div className="grid grid-cols-2 gap-3">
-            <Link href="/suppliers" className="border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 p-4 rounded text-center text-sm font-medium">
-              Suppliers
-            </Link>
-            <Link href="/promos" className="border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 p-4 rounded text-center text-sm font-medium">
-              Promo calendar
-            </Link>
-          </div>
-        </Section>
+          <Section title="Other settings">
+            <div className="grid grid-cols-2 gap-3">
+              <Link href="/suppliers" className="btn-ghost justify-center">Suppliers</Link>
+              <Link href="/promos" className="btn-ghost justify-center">Promo calendar</Link>
+            </div>
+          </Section>
+        </div>
 
-        {loading && <div className="text-center text-zinc-500">Loading…</div>}
+        {loading && <div className="text-center text-mute text-sm mt-6">Loading…</div>}
       </div>
     </main>
   );
@@ -183,11 +194,21 @@ export default function SettingsPage() {
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="mb-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-      <h2 className="text-lg font-bold">{title}</h2>
-      {description && <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 mb-4">{description}</p>}
+    <section className="card p-6">
+      <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+      {description && <p className="text-sm text-ink-soft mt-1.5 mb-5 leading-relaxed">{description}</p>}
+      {!description && <div className="mt-4" />}
       {children}
     </section>
+  );
+}
+
+function ResultBanner({ ok, message }: { ok: boolean; message: string }) {
+  const c = ok
+    ? "border-status-ok/30 bg-status-ok/5 text-status-ok"
+    : "border-status-bad/30 bg-status-bad/5 text-status-bad";
+  return (
+    <div className={`mt-4 p-3 rounded-xl text-sm border ${c}`}>{message}</div>
   );
 }
 
@@ -196,13 +217,13 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
 }) {
   return (
     <label className="block">
-      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>
+      <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{label}</span>
       <input
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="input"
       />
     </label>
   );
