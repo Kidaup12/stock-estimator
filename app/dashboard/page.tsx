@@ -140,6 +140,7 @@ export default function Dashboard() {
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Live</span>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/simulate" className="btn-ghost">Simulate</Link>
             <Link href="/reports" className="btn-ghost">Reports</Link>
             <Link href="/promos" className="btn-ghost">Promos</Link>
             <Link href="/suppliers" className="btn-ghost">Suppliers</Link>
