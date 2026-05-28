@@ -25,18 +25,20 @@ git status   # should be clean
 npm install              # postinstall runs prisma generate
 npx prisma db push       # creates prisma/dev.db with current SQLite schema
 
-# 3. Boot dev server (background it — Ctrl-C kills it when you're done)
-npm run dev              # 5-10s to be ready
+# 3. Boot dev server on port 3082 (3000 is busy on your host).
+#    NOTE: the pre-Plan-01-01 package.json does NOT have -p 3082 baked into its dev script,
+#    so we pass it explicitly here. Once Plan 01-01 lands, `npm run dev` defaults to 3082.
+npx next dev -p 3082     # 5-10s to be ready
 ```
 
 **4. In a browser:**
 
-a. Open http://localhost:3000/settings
+a. Open http://localhost:3082/settings
 b. Enter shop name = "Beauty Square Baseline", domain = "beautysquareke.co", token blank.
 c. Click **Test Connection** → expect `{ ok: true, mock: true }` (or similar).
 d. Click **Seed catalog** → wait for `{ ok: true, productsSeeded: N }`. **Record N.**
 e. Click **Generate forecasts** → wait for `{ ok: true, forecastsCreated: N }`. **Record N.**
-f. Open http://localhost:3000/dashboard → confirm Urgent / Review / All tabs render with products. **Screenshot.**
+f. Open http://localhost:3082/dashboard → confirm Urgent / Review / All tabs render with products. **Screenshot.**
 
 ```bash
 # 5. Stop the dev server (Ctrl-C in the terminal that ran npm run dev).
@@ -119,14 +121,14 @@ git commit -m "feat(01-01): add Phase 1 delta migration (onOrder + forecastRunId
 ```bash
 npm install              # ensures Prisma client is fresh
 npm run seed             # tsx scripts/seed-from-beautysquare.ts && tsx scripts/synth-sales-history.ts
-npm run dev              # http://localhost:3000
+npm run dev              # http://localhost:3082
 ```
 
-**Open http://localhost:3000/settings** → walk the same flow as Task 0:
+**Open http://localhost:3082/settings** → walk the same flow as Task 0:
 1. Configure shop ("Beauty Square Postgres" or similar).
 2. Click **Seed catalog** → expect `productsSeeded > 0`.
 3. Click **Generate forecasts** → **may error** because Plan 02 hasn't landed yet. That's expected and documented; the route still references `Math.random`, lacks the seeded RNG, and may break on the new forecastRunId field handling. **The seed + dashboard read path is what we're proving here.**
-4. Open http://localhost:3000/dashboard → confirm Urgent / Review / All tabs render with products.
+4. Open http://localhost:3082/dashboard → confirm Urgent / Review / All tabs render with products.
 
 **If the dashboard renders with seeded products: FND-01 is met for the Postgres rebuild.** Paste the N value (productsSeeded) into `01-01-SUMMARY.md`.
 

@@ -31,7 +31,7 @@ npm run seed
 npm run dev
 ```
 
-Open [http://localhost:3000/settings](http://localhost:3000/settings), leave the access token blank for mock mode, click **Seed catalog** → **Generate forecasts**, then jump to [/dashboard](http://localhost:3000/dashboard).
+Open [http://localhost:3082/settings](http://localhost:3082/settings), leave the access token blank for mock mode, click **Seed catalog** → **Generate forecasts**, then jump to [/dashboard](http://localhost:3082/dashboard).
 
 ## Deploy to Vercel
 
