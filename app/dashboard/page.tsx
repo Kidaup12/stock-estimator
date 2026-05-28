@@ -145,6 +145,7 @@ export default function Dashboard() {
             <Link href="/promos" className="btn-ghost">Promos</Link>
             <Link href="/suppliers" className="btn-ghost">Suppliers</Link>
             <Link href="/pricing" className="btn-ghost">Pricing</Link>
+            <Link href="/contact" className="btn-ghost">Contact</Link>
             <Link href="/settings" className="btn-ghost">Settings</Link>
             <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
               {busy ? "Running…" : "Re-run forecasts"}
