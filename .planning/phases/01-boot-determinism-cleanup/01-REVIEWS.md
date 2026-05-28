@@ -86,12 +86,17 @@ None — only one reviewer ran.
 
 ---
 
-## Recommended next step
+## Status — patches applied inline (2026-05-28)
 
-```bash
-/gsd:plan-phase 1 --reviews
-```
+Plans patched by hand instead of `--reviews` rerun. Specific edits:
 
-This re-spawns the planner with `01-REVIEWS.md` in its read list. The planner will produce targeted patches to the three existing plans (not a full replan) addressing the 6 findings. Then re-verify, then ship.
+| Finding | Patched in | Change |
+|---|---|---|
+| HIGH #1 — onOrder never goes up | `01-02-PLAN.md` new Task 2.5 | `app/api/orders/[id]/approve/route.ts` rewritten in `prisma.$transaction` with `onOrder: { increment }` and idempotency guard via `alreadyApproved` |
+| HIGH #2 — synth RNG scoping | `01-02-PLAN.md` Task 2.B | `poissonSample(lambda, rng)` and `rankToBaseRate(rank, total, rng)` signatures take `rng` as a parameter; all call sites inside `synth()` updated |
+| MED #3 — dashboard query mixes runs | `01-02-PLAN.md` Task 3.B | Two-step `findFirst({forecastRunId}) → findMany({forecastRunId})` replaces `groupBy + max(runDate)` |
+| MED #4 — forecastRunId migration | `01-01-PLAN.md` Task 2.E + must_haves | `forecastRunId String @default(cuid())` |
+| MED #5 — no pre-change baseline | `01-01-PLAN.md` new Task 0 | Read-only boot of SQLite app + mock flow to capture as-is state before any edit |
+| LOW #6 — Bash verifications | Deferred | Plan 03 verify still uses Bash blocks; acceptable for Roy's Git Bash setup |
 
-Alternatively, patch by hand if you want to keep the plans as your own work — the issues are concrete enough to fix without re-running the agent.
+Re-verification path: run `/gsd:execute-phase 1` directly. The plans now match what gets shipped.
