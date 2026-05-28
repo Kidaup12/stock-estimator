@@ -20,12 +20,13 @@ const TIERS: Tier[] = [
     tagline: "For solo founders and small brands just getting serious about inventory.",
     audience: "Solo founder · small brand",
     cta: "Start with Starter",
-    ctaHref: "/settings",
+    ctaHref: "/contact",
     features: [
-      "Up to 100 SKUs",
-      "Shopify integration",
+      "Up to KES 1.5M monthly revenue",
+      "1 system integration",
+      "2 globally proven forecasting models",
       "Forecasting tuned for the Kenyan market (paydays, holidays, school terms)",
-      "Promo calendar and reorder alerts via email and WhatsApp",
+      "Promo calendar and reorder alerts via email",
       "Weekly forecast dashboard",
       "Email support",
     ],
@@ -36,18 +37,18 @@ const TIERS: Tier[] = [
     tagline: "For established beauty brands ready to scale without stockouts.",
     audience: "Established brand · scaling",
     cta: "Choose Growth",
-    ctaHref: "/settings",
+    ctaHref: "/contact",
     highlight: true,
     badge: "Most popular",
     inherits: "Everything in Starter, plus",
     features: [
-      "Up to 500 SKUs",
-      "Odoo integration (two-way sync)",
+      "Up to KES 6M monthly revenue",
+      "2 system integrations",
+      "3 globally proven forecasting models",
       "AI forecasting with Google Trends, weather and FX signals",
-      "Multi-channel sales (Shopify + WhatsApp + Jumia)",
-      "M-Pesa COD filtering and variable lead-time modeling",
+      "Multi-channel sales (Shopify + Jumia)",
       "Auto-calculated safety stock and PO suggestions",
-      "Onboarding call and WhatsApp support",
+      "Onboarding call and email support",
     ],
   },
   {
@@ -56,23 +57,28 @@ const TIERS: Tier[] = [
     tagline: "For multi-brand groups, distributors and larger players.",
     audience: "Multi-brand · distributor",
     cta: "Talk to us",
-    ctaHref: "/settings",
+    ctaHref: "/contact",
     inherits: "Everything in Growth, plus",
     features: [
-      "Unlimited SKUs",
+      "Revenue above KES 6M monthly",
+      "3 system integrations",
+      "4 globally proven forecasting models",
       "Multi-warehouse and multi-brand support",
       "Custom features and API access",
       "Monthly planner check-ins and quarterly model retraining",
-      "Priority support and dedicated Slack channel",
     ],
   },
 ];
 
 const KES = (n: number) => n.toLocaleString("en-KE");
 
+const CONTACT_EMAIL = "wezesha@simplydoneafrica.com";
+const CONTACT_WHATSAPP_DISPLAY = "+254 758 158 195";
+const CONTACT_WHATSAPP_LINK = "https://wa.me/254758158195";
+
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-canvas">
+    <main className="min-h-screen bg-canvas flex flex-col">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-baseline gap-2.5">
@@ -80,8 +86,8 @@ export default function PricingPage() {
             <span className="text-base font-semibold tracking-tight">Wezesha Restock OS</span>
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Pricing</span>
           </Link>
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
-            Back to dashboard
+          <Link href="/contact" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+            Contact
           </Link>
         </div>
       </header>
@@ -99,8 +105,8 @@ export default function PricingPage() {
             <br className="hidden sm:block" /> Three sizes.
           </h1>
           <p className="text-ink-soft mt-5 sm:mt-6 text-base sm:text-lg leading-relaxed max-w-xl mx-auto">
-            Pick the plan that matches the catalogue you actually run today.
-            Move up when your SKU count or channel mix grows.
+            Plans are priced by monthly revenue, not catalogue size.
+            A 2,000-item shop doing modest sales pays the same as a 50-item one.
           </p>
         </div>
       </section>
@@ -116,10 +122,51 @@ export default function PricingPage() {
           <FactCell label="Contracts" value="Month-to-month" hint="Cancel any time, no lock-in" />
         </div>
 
+        <div className="mt-10 card p-6 sm:p-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+            <div>
+              <div className="text-2xs uppercase tracking-wider text-accent-700 font-semibold">Talk to us</div>
+              <h2 className="text-lg font-semibold tracking-tight mt-1">Not sure which plan fits?</h2>
+              <p className="text-sm text-ink-soft mt-2 leading-relaxed">
+                Send us your monthly revenue and channel mix.
+                We&apos;ll point you to the right plan.
+              </p>
+            </div>
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className="rounded-xl border border-line hover:border-accent-300 hover:bg-accent-50/40 transition p-4 block"
+            >
+              <div className="text-2xs uppercase tracking-wider text-mute mb-1">Email</div>
+              <div className="font-medium text-ink num break-all">{CONTACT_EMAIL}</div>
+            </a>
+            <a
+              href={CONTACT_WHATSAPP_LINK}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-line hover:border-accent-300 hover:bg-accent-50/40 transition p-4 block"
+            >
+              <div className="text-2xs uppercase tracking-wider text-mute mb-1">WhatsApp</div>
+              <div className="font-medium text-ink num">{CONTACT_WHATSAPP_DISPLAY}</div>
+            </a>
+          </div>
+          <div className="mt-5 text-center">
+            <Link href="/contact" className="text-2xs uppercase tracking-wider text-accent-700 hover:text-accent-800 font-semibold">
+              Or fill in the contact form →
+            </Link>
+          </div>
+        </div>
+
         <p className="text-2xs uppercase tracking-wider text-mute text-center mt-10">
-          Prices in KES, exclusive of VAT. Questions? <Link href="/settings" className="text-accent-700 hover:text-accent-800 normal-case tracking-normal">Reach out from Settings</Link>.
+          Prices in KES, exclusive of VAT.
         </p>
       </section>
+
+      <footer className="border-t border-line mt-auto">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-6 text-center text-2xs uppercase tracking-wider text-mute">
+          Wezesha Restock OS — a product of{" "}
+          <span className="text-ink-soft">SimplyDone Africa</span>
+        </div>
+      </footer>
     </main>
   );
 }
