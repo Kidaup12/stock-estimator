@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Tenant {
@@ -41,6 +42,9 @@ model Product {
   dailySalesRate    Float    @default(0)
   lastSynced        DateTime @default(now())
   supplierId        String?
+  onOrder           Int      @default(0)
+  expectedArrivalAt DateTime?
+  receivedAt        DateTime?
 
   tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   supplier          Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -139,6 +143,8 @@ model Prediction {
   reasoning           String
   urgency             String
   signals             String
+  forecastRunId       String   @default(cuid())
+  regime              String?
 
   tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -146,6 +152,7 @@ model Prediction {
 
   @@index([tenantId, runDate])
   @@index([productId, runDate])
+  @@index([tenantId, productId, runDate])
 }
 
 model Order {
