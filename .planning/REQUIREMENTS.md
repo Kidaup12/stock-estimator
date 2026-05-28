@@ -168,13 +168,88 @@ Which phases cover which requirements. Populated by the roadmapper.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmapper) | | |
+| FND-01 | Phase 1 | Pending |
+| FND-02 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Pending |
+| FND-05 | Phase 1 | Pending |
+| FND-06 | Phase 1 | Pending |
+| FND-07 | Phase 1 | Pending |
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| TNT-01 | Phase 2 | Pending |
+| TNT-02 | Phase 2 | Pending |
+| TNT-03 | Phase 2 | Pending |
+| TNT-04 | Phase 2 | Pending |
+| TNT-05 | Phase 2 | Pending |
+| TNT-06 | Phase 2 | Pending |
+| TNT-07 | Phase 2 | Pending |
+| TNT-08 | Phase 2 | Pending |
+| SHOP-01 | Phase 3 | Pending |
+| SHOP-02 | Phase 3 | Pending |
+| SHOP-03 | Phase 3 | Pending |
+| SHOP-04 | Phase 3 | Pending |
+| SHOP-05 | Phase 3 | Pending |
+| SHOP-06 | Phase 3 | Pending |
+| SHOP-07 | Phase 3 | Pending |
+| SHOP-08 | Phase 3 | Pending |
+| SHOP-09 | Phase 3 | Pending |
+| ODOO-01 | Phase 3 | Pending |
+| ODOO-02 | Phase 3 | Pending |
+| ODOO-03 | Phase 3 | Pending |
+| ODOO-04 | Phase 3 | Pending |
+| ODOO-05 | Phase 3 | Pending |
+| QB-01 | Phase 4 | Pending |
+| QB-02 | Phase 4 | Pending |
+| QB-03 | Phase 4 | Pending |
+| QB-04 | Phase 4 | Pending |
+| QB-05 | Phase 4 | Pending |
+| QB-06 | Phase 4 | Pending |
+| QB-07 | Phase 4 | Pending |
+| MRG-01 | Phase 4 | Pending |
+| MRG-02 | Phase 4 | Pending |
+| MRG-03 | Phase 4 | Pending |
+| MRG-04 | Phase 4 | Pending |
+| PO-01 | Phase 4 | Pending |
+| PO-02 | Phase 4 | Pending |
+| PO-03 | Phase 4 | Pending |
+| PO-04 | Phase 4 | Pending |
+| PO-05 | Phase 4 | Pending |
+| PO-06 | Phase 4 | Pending |
+| PO-07 | Phase 4 | Pending |
+| PO-08 | Phase 4 | Pending |
+| CSV-01 | Phase 4 | Pending |
+| CSV-02 | Phase 4 | Pending |
+| CSV-03 | Phase 4 | Pending |
+| FCT-01 | Phase 5 | Pending |
+| FCT-02 | Phase 5 | Pending |
+| FCT-03 | Phase 5 | Pending |
+| FCT-04 | Phase 5 | Pending |
+| FCT-05 | Phase 5 | Pending |
+| FCT-06 | Phase 5 | Pending |
+| FCT-07 | Phase 5 | Pending |
+| FCT-08 | Phase 5 | Pending |
+| FCT-09 | Phase 5 | Pending |
+| ABC-01 | Phase 5 | Pending |
+| ABC-02 | Phase 5 | Pending |
+| ABC-03 | Phase 5 | Pending |
+| OPS-01 | Phase 5 | Pending |
+| OPS-02 | Phase 5 | Pending |
+| OPS-03 | Phase 5 | Pending |
+| OPS-04 | Phase 5 | Pending |
+| HND-01 | Phase 5 | Pending |
+| HND-02 | Phase 5 | Pending |
+| HND-03 | Phase 5 | Pending |
+| HND-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 67 total
-- Mapped to phases: TBD
-- Unmapped: TBD
+- Mapped to phases: 67
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-28*
-*Last updated: 2026-05-28 after initial definition*
+*Last updated: 2026-05-28 after roadmap creation (traceability populated)*
