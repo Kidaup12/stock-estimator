@@ -11,11 +11,11 @@ Requirements for the production v1 release. Each maps to roadmap phases.
 
 - [ ] **FND-01**: Existing app boots locally and the mock onboarding → seed → forecast → dashboard flow works end-to-end with no code changes.
 - [ ] **FND-02**: Forecast outputs are deterministic — same `(productId, runDate)` produces the same `layer1Value`/`layer2Value`/`signals[]` on every run. (mulberry32 replaces `Math.random()`.)
-- [ ] **FND-03**: Database is Postgres. Prisma `provider = "postgresql"`, real migration history (`prisma migrate`), `DATABASE_URL` via env, `prisma/dev.db` scrubbed from git.
+- [x] **FND-03**: Database is Postgres. Prisma `provider = "postgresql"`, real migration history (`prisma migrate`), `DATABASE_URL` via env, `prisma/dev.db` scrubbed from git.
 - [ ] **FND-04**: `Product.onOrder`, `Product.expectedArrivalAt`, `Product.receivedAt` schema fields exist; reorder math subtracts on-order stock so approved POs don't double-recommend on the next forecast run.
 - [ ] **FND-05**: `assignAbc()` lives in exactly one place (`lib/forecast/abc.ts`); the API route and the script import the same implementation.
 - [ ] **FND-06**: Prediction history is append-only — `prisma.prediction.deleteMany()` is gone from the forecast run route; predictions are tagged with `forecastRunId`; dashboards query latest-per-product.
-- [ ] **FND-07**: `.env.example` documents every required environment variable.
+- [x] **FND-07**: `.env.example` documents every required environment variable.
 
 ### Authentication
 
@@ -170,11 +170,11 @@ Which phases cover which requirements. Populated by the roadmapper.
 |-------------|-------|--------|
 | FND-01 | Phase 1 | Pending |
 | FND-02 | Phase 1 | Pending |
-| FND-03 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Complete |
 | FND-04 | Phase 1 | Pending |
 | FND-05 | Phase 1 | Pending |
 | FND-06 | Phase 1 | Pending |
-| FND-07 | Phase 1 | Pending |
+| FND-07 | Phase 1 | Complete |
 | AUTH-01 | Phase 2 | Pending |
 | AUTH-02 | Phase 2 | Pending |
 | AUTH-03 | Phase 2 | Pending |

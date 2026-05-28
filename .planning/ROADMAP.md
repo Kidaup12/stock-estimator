@@ -26,7 +26,7 @@
   4. After running a forecast and approving an order, the next forecast run does NOT re-recommend the same SKU — because `Product.onOrder` is subtracted from the reorder math.
   5. Predictions from two consecutive runs both exist in the DB (no `deleteMany`), tagged with distinct `forecastRunId`; dashboard shows the latest per product; `assignAbc()` is imported from `lib/forecast/abc.ts` by both the API route and the script.
 **Plans**: 3 plans
-- [ ] 01-01-PLAN.md — Postgres migration + schema deltas + dev.db scrub + env.example + README
+- [x] 01-01-PLAN.md — Postgres migration + schema deltas + dev.db scrub + env.example + README
 - [ ] 01-02-PLAN.md — Forecast determinism (mulberry32) + abc/reorder extraction + append-only predictions
 - [ ] 01-03-PLAN.md — Vitest harness + check-determinism + Phase 1 sanity boot (human verification)
 **UI hint**: no
@@ -87,7 +87,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Boot, Determinism & Cleanup | 0/3 | Not started | - |
+| 1. Boot, Determinism & Cleanup | 1/3 | In Progress|  |
 | 2. Multi-Tenant Auth & Tenant Routing | 0/TBD | Not started | - |
 | 3. Real Shopify Ingest + Odoo | 0/TBD | Not started | - |
 | 4. QuickBooks + Source-of-Truth Merge + PO Delivery | 0/TBD | Not started | - |
