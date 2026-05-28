@@ -42,7 +42,7 @@ const TIERS: Tier[] = [
     badge: "Most popular",
     inherits: "Everything in Starter, plus",
     features: [
-      "Up to KES 6M monthly revenue",
+      "Up to KES 10M monthly revenue",
       "2 system integrations",
       "3 globally proven forecasting models",
       "AI forecasting with Google Trends, weather and FX signals",
@@ -60,7 +60,7 @@ const TIERS: Tier[] = [
     ctaHref: "/contact",
     inherits: "Everything in Growth, plus",
     features: [
-      "Revenue above KES 6M monthly",
+      "Revenue above KES 10M monthly",
       "3 system integrations",
       "4 globally proven forecasting models",
       "Multi-warehouse and multi-brand support",
