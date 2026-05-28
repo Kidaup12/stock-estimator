@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -40,7 +41,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# sqlite write-ahead log only (commit the .db so Vercel reads have a DB; switch to Postgres for full prod use)
+# sqlite — no longer used (Phase 1 swapped to Postgres); kept ignored so accidental local sqlite never re-enters tracking
+prisma/dev.db
 prisma/dev.db-journal
 
 # design inspiration files (kept locally, not part of build)

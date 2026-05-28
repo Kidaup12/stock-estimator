@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16.4-alpine
+    container_name: wezesha-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wezesha
+      POSTGRES_PASSWORD: wezesha_dev
+      POSTGRES_DB: wezesha
+    ports:
+      - "5433:5432"
+    volumes:
+      - wezesha-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wezesha -d wezesha"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  wezesha-pg:
