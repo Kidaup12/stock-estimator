@@ -1,0 +1,64 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-29T23:00:05.377Z",
+  "phase": "01",
+  "phase_name": "boot-determinism-cleanup",
+  "phase_dir": ".planning/phases/01-boot-determinism-cleanup",
+  "plan": null,
+  "task": null,
+  "total_tasks": 0,
+  "status": "phase_complete_awaiting_next_phase_decision",
+  "completed_tasks": [
+    { "id": "plan-01-01", "name": "Postgres migration + dev.db scrub + .env.example + README", "status": "done", "commit": "151d887" },
+    { "id": "plan-01-02", "name": "Forecast determinism + onOrder feedback + dashboard query rewrite (codex patches inline)", "status": "done", "commit": "ce99b83" },
+    { "id": "plan-01-03", "name": "Vitest harness + check-determinism + Phase 1 checkpoint", "status": "done", "commit": "ae47bbc" }
+  ],
+  "remaining_tasks": [
+    { "id": "decision", "name": "Roy + Anjay decide Phase 2 (auth+multi-tenant) vs Phase 3 (real Shopify, single-tenant shortcut) ordering", "status": "blocked_on_human" },
+    { "id": "phase-2-discuss", "name": "/gsd:discuss-phase 2 --auto OR /gsd:discuss-phase 3 --auto", "status": "not_started" }
+  ],
+  "blockers": [
+    {
+      "description": "Phase 2 vs Phase 3 ordering decision — Anjay's call",
+      "type": "human_action",
+      "workaround": "Default to Phase 2 per ROADMAP.md if Anjay unavailable; Phase 3 single-tenant is a defensible shortcut to a Level-2 demo for Mary"
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Roy shows localhost:3082 to Anjay (Level 1 demo: real catalog + synthetic sales + working forecast UX)",
+      "context": "Tests product-market signal before more engineering. Anjay's reaction shapes Phase 2 vs Phase 3 priority",
+      "blocking": false
+    },
+    {
+      "action": "Push 18 commits + 1 docs commit on `main` to `Kidaup12/stock-estimator` upstream (not yet pushed)",
+      "context": "Local clone only; Anjay + the GitHub PR refs don't see Phase 1 yet",
+      "blocking": false
+    },
+    {
+      "action": "Kill the localhost:3082 dev server (background process b2jqbb3dj) if pausing for more than ~24h",
+      "context": "Server is still running. Harmless but eats RAM",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    { "decision": "Use Roy's personal Supabase project (lkkljxvuhkaydhffpaix, eu-central-1 Frankfurt) for dev; client account when prod ships", "rationale": "Transfer is trivial (re-run migrations); Anjay's account wasn't ready; speed > clean ownership at the dev stage", "phase": "01" },
+    { "decision": "Session Pooler (port 5432, IPv4-proxied) for both DATABASE_URL and DIRECT_URL", "rationale": "Direct connection is IPv6-only on free tier; most Kenyan ISPs are IPv4. Session pooler works for both runtime AND prisma migrate, eliminating the need for two pooler URLs at the dev stage", "phase": "01" },
+    { "decision": "Dev server port 3082 instead of default 3000", "rationale": "Roy's :3000 was busy. Baked into package.json's `dev` script", "phase": "01" },
+    { "decision": "Skip §A SQLite baseline boot in RUNBOOK", "rationale": "Codex flagged §A as belt-and-suspenders; §D Postgres boot covers the same FND-01 ground without the rollback/replay dance", "phase": "01" },
+    { "decision": "Apply Codex's 6 review findings inline via Edit tool rather than re-spawning planner with --reviews", "rationale": "Faster, Roy stays in the loop, surgical patches preserve plan structure", "phase": "01" },
+    { "decision": "Plan 02 added forecastRunId @default(cuid()) at schema level (codex catch #4)", "rationale": "Migration-safe — if a future prod DB has existing predictions, the default backfills cleanly. The route still supplies a single batch ID per run; the default only fires for orphan writes", "phase": "01" }
+  ],
+  "uncommitted_files": [],
+  "background_processes": [
+    {
+      "id": "b2jqbb3dj",
+      "command": "npm run dev",
+      "url": "http://localhost:3082",
+      "purpose": "Dev server for Playwright verification during Wave 2/3",
+      "kill_when_resuming": "optional — Next.js Turbopack will hot-reload Phase 2/3 edits if you leave it up"
+    }
+  ],
+  "next_action": "/gsd:resume-work to load this handoff, then either /gsd:discuss-phase 2 --auto (canonical roadmap order) OR /gsd:discuss-phase 3 --auto (single-tenant Shopify-first shortcut). Recommend asking Anjay first.",
+  "context_notes": "Phase 1 was the boring foundation — Postgres + determinism + onOrder feedback + dedupe. Live-verified end-to-end via Playwright: dashboard renders Beauty Square's 1023-product catalog at localhost:3082 with KES 11.6M synthetic-sales revenue, 109 critical/high reorders, 130 stockouts. Two consecutive forecast runs produce byte-identical math (FND-02 mulberry32 works). Approving 'Glow From Within Bundle' bumped Product.onOrder 0→65 transactionally; next forecast recommended 0 instead of 65 (FND-04 + codex #1 closed). All work is in git on `main` of the local clone at `wezesha/stock-estimator/`, not yet pushed upstream. The next decision is strategic (demo Anjay first OR ship Phase 2 auth foundation) rather than technical — that's why this is paused-pending-decision rather than paused-mid-task. Roy's session preferences: grade-9 explanations, concrete options + recommendations in AskUserQuestion, CLI-first execution, ask before destructive operations. Codex CLI is installed and proven valuable as a second-opinion reviewer (caught 6 real issues plan-checker missed). Supabase agent-skills available via `npx skills add supabase/agent-skills` (deferred — not installed)."
+}
