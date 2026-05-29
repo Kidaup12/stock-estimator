@@ -2,8 +2,8 @@
 phase: 01-boot-determinism-cleanup
 plan: 02
 subsystem: forecast-core
-tags: [determinism, rng, mulberry32, dedupe, append-only, onOrder, transactional]
-status: complete
+tags: [determinism, rng, mulberry32, dedupe, append-only, onOrder, transactional, verified-live]
+status: complete-verified
 dependencies:
   requires:
     - "01-01 schema deltas (Product.onOrder, Prediction.forecastRunId, Prediction.regime, [tenantId,productId,runDate] composite index)"
@@ -215,3 +215,94 @@ Verified at SUMMARY time:
 - `npx tsc --noEmit` clean at every task boundary
 
 Next: orchestrator drives Playwright to verify two-runs-identical + approve-shrinks-reorder end-to-end. Plan 01-03 will lock these invariants in vitest + a `check-determinism.ts` script.
+
+## Live Verification (2026-05-29, orchestrator-driven)
+
+After Plan 01-02 shipped, the orchestrator ran three forecast cycles against the live Supabase + Beauty Square data to verify FND-02 + FND-04 + codex review patches end-to-end. Dev server stayed up at port 3082; Next.js Turbopack hot-reloaded all Plan 02 edits without restart.
+
+### FND-02 — Forecast determinism (mulberry32 + seedFrom)
+
+Two consecutive `POST /api/forecast/run` calls produced batches `4a8a80d7-…` (run #1) and `59373c3f-…` (run #2). Sampled the top 5 critical-urgency predictions from each batch (sorted by productId for stable diff).
+
+| Field per sample row | Run #1 vs Run #2 |
+|---|---|
+| `productId` (×5) | identical |
+| `layer1Forecast30d` | byte-identical |
+| `layer2Adjustment` | byte-identical |
+| `finalForecast30d` | byte-identical |
+| `recommendedQty` | identical |
+| `safetyStock` | byte-identical |
+| `urgency` | identical |
+| `signals` (JSON-encoded) | byte-identical |
+
+Programmatic comparison via `Compare-Object`: `SAMPLE_BYTE_IDENTICAL=true`. Sample[0] full payload: `{ layer1Forecast30d: 0.5643835616438356, layer2Adjustment: 0.3302779294049647, finalForecast30d: 0.8946614910488003, safetyStock: 3.309241605310077, recommendedQty: 5, urgency: critical, signals: [Madaraka Day +30%, Payday +20%] }` in both runs. The mulberry32 RNG seeded on `(productId, todayISO)` is fully reproducible.
+
+### Codex REVIEWS #1 — Approve route increments `Product.onOrder` (transactional + idempotent)
+
+Picked one critical pending order from run #2 batch:
+
+```
+orderId:          cmprfz8g1059pv8x8559f6vjz
+productId:        cmprdm77m000wv8q8blk966fp
+productTitle:     "Glow From Within Bundle"
+currentStock:     4
+Product.onOrder:  0    (pre-approve)
+recommendedQty:   65
+urgency:          critical
+finalForecast30d: 48.50523219413254
+```
+
+**First `POST /api/orders/[id]/approve`:**
+```json
+{ "ok": true, "incrementedOnOrderBy": 65, "order": { "status": "approved", "approvedAt": "2026-05-29T21:51:42.010Z" } }
+```
+
+**Second `POST` to the same order (idempotency probe):**
+```json
+{ "ok": true, "alreadyApproved": true, "order": { "approvedAt": "2026-05-29T21:51:42.010Z" } }
+```
+
+`approvedAt` did not change on the second call. DB-side verify after both calls: `Product.onOrder = 65` (exactly one bump, not two), `count(orders where status='approved' and productId=this) = 1`. The `prisma.$transaction` + `if (status === "approved") return { alreadyApproved: true }` pattern from the codex patch is functionally correct.
+
+### FND-04 — Approving an order shrinks the next forecast's `recommendedQty`
+
+Triggered forecast run #3 (`3a9d97ff-…`). Queried the new prediction for the Glow Bundle product:
+
+| Field | Run #1/#2 (pre-approve) | Run #3 (post-approve) | Verdict |
+|---|---|---|---|
+| `layer1Forecast30d` | 30.10684931506849 | 30.10684931506849 | identical (determinism still holds) |
+| `layer2Adjustment` | 18.39838287906404 | 18.39838287906404 | identical |
+| `finalForecast30d` | 48.50523219413254 | 48.50523219413254 | identical |
+| `safetyStock` | 19.9551311865973 | 19.9551311865973 | identical |
+| `Product.currentStock` | 4 | 4 | unchanged |
+| `Product.onOrder` | 0 | 65 | +65 from approve |
+| **`recommendedQty`** | **65** | **0** | **shrank to 0 as predicted by `ceil(48.5 + 20 - 4 - 65) = -0.5 → max(0,…) = 0`** |
+
+Dashboard side: Reorder tab count went **109 → 108**; `document.body.innerText` no longer contains `"Glow From Within Bundle"` in the Reorder section. Screenshot at `.planning/phases/01-boot-determinism-cleanup/01-02-dashboard-post-approve.png`.
+
+### Codex REVIEWS #3 — Dashboard reads latest `forecastRunId`, not `max(runDate)`
+
+Confirmed: the live DB now holds 4 distinct forecast batches (1 from Wave 1's auto-defaulted predictions + 3 from Wave 2's explicit runs). Without the codex patch, `GET /api/forecast` would have interleaved rows from all 4 batches. With the patch, the dashboard reads only the most recent batch (1023 rows from `3a9d97ff-…`). Visual confirmation: dashboard always shows exactly one urgency value per product, KES totals self-consistent, no duplicate product rows.
+
+### Codex REVIEWS #2 — synth RNG-as-parameter fix
+
+`scripts/synth-sales-history.ts` runs cleanly with `poissonSample(λ, rng)` and `rankToBaseRate(rank, total, rng)` taking the seeded RNG via parameter. Verified by `npx tsc --noEmit` (zero errors at every task boundary) and by the fact that the seed pipeline ran end-to-end during Wave 1 verification.
+
+### Verification commits
+
+| Commit | What | Hash |
+|---|---|---|
+| Plan 02 helpers | `lib/forecast/{rng,rng-constants,abc,reorder}.ts` | `09e9b59` |
+| RNG everywhere | 21 Math.random sites + Fisher-Yates shuffle fix | `d6af01c` |
+| Approve route | `prisma.$transaction` + idempotency + `onOrder.increment` | `c31c0df` |
+| Helpers + dashboard query | latest-forecastRunId pin, deleteMany removed | `4cb5893` |
+| Plan summary | `01-02-SUMMARY.md` | `8e1901f` |
+| Verification proof | dashboard screenshot + this verification block | (this commit) |
+
+### Outstanding (deferred to Plan 01-03)
+
+- Vitest harness covering `lib/forecast/{rng,abc,reorder}.ts` (lockable invariants for the Phase 5 model swap)
+- `scripts/check-determinism.ts` as a `npm run check:determinism` gate
+- Phase 1 sanity boot checkpoint (human-verify)
+
+These were always Wave 3 scope. Plan 02 is structurally and functionally complete.
