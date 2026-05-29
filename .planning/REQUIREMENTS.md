@@ -9,7 +9,7 @@ Requirements for the production v1 release. Each maps to roadmap phases.
 
 ### Foundations
 
-- [ ] **FND-01**: Existing app boots locally and the mock onboarding → seed → forecast → dashboard flow works end-to-end with no code changes.
+- [x] **FND-01**: Existing app boots locally and the mock onboarding → seed → forecast → dashboard flow works end-to-end with no code changes.
 - [x] **FND-02**: Forecast outputs are deterministic — same `(productId, runDate)` produces the same `layer1Value`/`layer2Value`/`signals[]` on every run. (mulberry32 replaces `Math.random()`.)
 - [x] **FND-03**: Database is Postgres. Prisma `provider = "postgresql"`, real migration history (`prisma migrate`), `DATABASE_URL` via env, `prisma/dev.db` scrubbed from git.
 - [x] **FND-04**: `Product.onOrder`, `Product.expectedArrivalAt`, `Product.receivedAt` schema fields exist; reorder math subtracts on-order stock so approved POs don't double-recommend on the next forecast run.
@@ -168,7 +168,7 @@ Which phases cover which requirements. Populated by the roadmapper.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 1 | Pending |
+| FND-01 | Phase 1 | Complete |
 | FND-02 | Phase 1 | Complete |
 | FND-03 | Phase 1 | Complete |
 | FND-04 | Phase 1 | Complete |

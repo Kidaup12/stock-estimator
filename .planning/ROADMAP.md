@@ -28,7 +28,7 @@
 **Plans**: 3 plans
 - [x] 01-01-PLAN.md — Postgres migration + schema deltas + dev.db scrub + env.example + README
 - [x] 01-02-PLAN.md — Forecast determinism (mulberry32) + abc/reorder extraction + append-only predictions
-- [ ] 01-03-PLAN.md — Vitest harness + check-determinism + Phase 1 sanity boot (human verification)
+- [x] 01-03-PLAN.md — Vitest harness + check-determinism + Phase 1 sanity boot (human verification)
 **UI hint**: no
 
 ### Phase 2: Multi-Tenant Auth & Tenant Routing
