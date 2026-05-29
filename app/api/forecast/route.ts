@@ -14,12 +14,26 @@ export async function GET() {
   const last365Start = new Date(today);
   last365Start.setUTCFullYear(today.getUTCFullYear() - 1);
 
+  // Pin dashboard to the latest forecastRunId per tenant (codex REVIEWS #3).
+  // Using max(runDate) per product can interleave rows across batches; the
+  // forecastRunId batch pin guarantees one consistent run.
+  const latestRun = await prisma.prediction.findFirst({
+    where: { tenantId: tenant.id },
+    orderBy: { runDate: "desc" },
+    select: { forecastRunId: true },
+  });
+
   const [predictions, sales30, sales90, sales365] = await Promise.all([
-    prisma.prediction.findMany({
-      where: { tenantId: tenant.id },
-      include: { product: true },
-      orderBy: { daysUntilStockout: "asc" },
-    }),
+    latestRun
+      ? prisma.prediction.findMany({
+          where: {
+            tenantId: tenant.id,
+            forecastRunId: latestRun.forecastRunId,
+          },
+          include: { product: true },
+          orderBy: { daysUntilStockout: "asc" },
+        })
+      : Promise.resolve([]),
     prisma.salesHistory.groupBy({
       by: ["productId"],
       where: { tenantId: tenant.id, date: { gte: last30Start } },

@@ -1,23 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { simulateLayeredForecast, type ActivePromo } from "@/lib/forecast/simulate-layers";
+import { assignAbc } from "@/lib/forecast/abc";
+import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
 
 export const maxDuration = 120;
-
-function assignAbc(productsWithRevenue: { id: string; revenue: number }[]): Record<string, string> {
-  const sorted = [...productsWithRevenue].sort((a, b) => b.revenue - a.revenue);
-  const total = sorted.reduce((s, p) => s + p.revenue, 0);
-  let cumulative = 0;
-  const map: Record<string, string> = {};
-  for (const p of sorted) {
-    cumulative += p.revenue;
-    const pct = total > 0 ? cumulative / total : 1;
-    if (pct <= 0.7) map[p.id] = "A";
-    else if (pct <= 0.9) map[p.id] = "B";
-    else map[p.id] = "C";
-  }
-  return map;
-}
 
 export async function POST() {
   const tenant = await prisma.tenant.findFirst();
@@ -28,6 +15,10 @@ export async function POST() {
     include: { supplier: true },
   });
   if (products.length === 0) return NextResponse.json({ error: "No products. Seed first." }, { status: 400 });
+
+  // One batch id per run — every Prediction row in this run shares it.
+  // Dashboard pins to the latest forecastRunId per tenant (codex REVIEWS #3).
+  const forecastRunId = crypto.randomUUID();
 
   const today = new Date();
   const since = new Date(today);
@@ -67,7 +58,7 @@ export async function POST() {
     scopeValue: p.scopeValue,
   }));
 
-  await prisma.prediction.deleteMany({ where: { tenantId: tenant.id } });
+  // FND-06: predictions accumulate. No deleteMany — every run is a new batch.
 
   let created = 0;
   for (const p of products) {
@@ -90,12 +81,22 @@ export async function POST() {
       activePromos: promosShaped,
     });
 
+    // FND-04: subtract Product.onOrder so approved-but-not-received POs do
+    // not trigger duplicate restock recommendations. Simulator does not know
+    // about onOrder, so we recompute here with the helper.
+    const adjustedRecommendedQty = computeRecommendedQty({
+      finalForecast30d: result.finalForecast30d,
+      safetyStock: result.safetyStock,
+      currentStock: p.currentStock,
+      onOrder: p.onOrder,
+    });
+
     await prisma.product.update({
       where: { id: p.id },
       data: { abcCategory: abc },
     });
 
-    await prisma.prediction.create({
+    const prediction = await prisma.prediction.create({
       data: {
         tenantId: tenant.id,
         productId: p.id,
@@ -104,34 +105,30 @@ export async function POST() {
         layer2Adjustment: result.layer2Adjustment,
         finalForecast30d: result.finalForecast30d,
         daysUntilStockout: result.daysUntilStockout,
-        recommendedQty: result.recommendedQty,
+        recommendedQty: adjustedRecommendedQty,
         safetyStock: result.safetyStock,
         reorderPoint: result.reorderPoint,
         confidence: result.confidence,
         reasoning: result.reasoning,
         urgency: result.urgency,
         signals: JSON.stringify(result.signals),
+        forecastRunId,
+        regime: null,
       },
     });
 
-    if (result.recommendedQty > 0 && (result.urgency === "critical" || result.urgency === "high")) {
-      const pred = await prisma.prediction.findFirst({
-        where: { tenantId: tenant.id, productId: p.id },
-        orderBy: { runDate: "desc" },
+    if (adjustedRecommendedQty > 0 && (result.urgency === "critical" || result.urgency === "high")) {
+      await prisma.order.create({
+        data: {
+          tenantId: tenant.id,
+          predictionId: prediction.id,
+          status: "pending",
+        },
       });
-      if (pred) {
-        await prisma.order.create({
-          data: {
-            tenantId: tenant.id,
-            predictionId: pred.id,
-            status: "pending",
-          },
-        });
-      }
     }
 
     created++;
   }
 
-  return NextResponse.json({ ok: true, forecastsCreated: created });
+  return NextResponse.json({ ok: true, forecastsCreated: created, forecastRunId });
 }

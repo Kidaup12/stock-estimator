@@ -1,22 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { simulateLayeredForecast, type ActivePromo } from "../lib/forecast/simulate-layers";
+import { assignAbc } from "../lib/forecast/abc";
+import { recommendedQty as computeRecommendedQty } from "../lib/forecast/reorder";
 
 const prisma = new PrismaClient();
-
-function assignAbc(productsWithRevenue: { id: string; revenue: number }[]): Record<string, string> {
-  const sorted = [...productsWithRevenue].sort((a, b) => b.revenue - a.revenue);
-  const total = sorted.reduce((s, p) => s + p.revenue, 0);
-  let cumulative = 0;
-  const map: Record<string, string> = {};
-  for (const p of sorted) {
-    cumulative += p.revenue;
-    const pct = total > 0 ? cumulative / total : 1;
-    if (pct <= 0.7) map[p.id] = "A";
-    else if (pct <= 0.9) map[p.id] = "B";
-    else map[p.id] = "C";
-  }
-  return map;
-}
 
 async function main() {
   const tenant = await prisma.tenant.findFirst();
@@ -27,6 +14,9 @@ async function main() {
     include: { supplier: true },
   });
   console.log(`Generating forecasts for ${products.length} products`);
+
+  // One batch id for this whole run — shared across every Prediction row.
+  const forecastRunId = crypto.randomUUID();
 
   const today = new Date();
   const since = new Date(today);
@@ -66,8 +56,8 @@ async function main() {
     scopeValue: p.scopeValue,
   }));
 
-  await prisma.prediction.deleteMany({ where: { tenantId: tenant.id } });
-  await prisma.order.deleteMany({ where: { tenantId: tenant.id } });
+  // FND-06: predictions accumulate. Orders also accumulate (the old
+  // deleteMany wiped both — see CONCERNS.md §6.2 / RESEARCH §15 Pitfall #7).
 
   let created = 0;
   for (const p of products) {
@@ -90,6 +80,14 @@ async function main() {
       activePromos: promosShaped,
     });
 
+    // FND-04: subtract onOrder so approved POs do not double-recommend.
+    const adjustedRecommendedQty = computeRecommendedQty({
+      finalForecast30d: result.finalForecast30d,
+      safetyStock: result.safetyStock,
+      currentStock: p.currentStock,
+      onOrder: p.onOrder,
+    });
+
     await prisma.product.update({ where: { id: p.id }, data: { abcCategory: abc } });
 
     const prediction = await prisma.prediction.create({
@@ -101,17 +99,19 @@ async function main() {
         layer2Adjustment: result.layer2Adjustment,
         finalForecast30d: result.finalForecast30d,
         daysUntilStockout: result.daysUntilStockout,
-        recommendedQty: result.recommendedQty,
+        recommendedQty: adjustedRecommendedQty,
         safetyStock: result.safetyStock,
         reorderPoint: result.reorderPoint,
         confidence: result.confidence,
         reasoning: result.reasoning,
         urgency: result.urgency,
         signals: JSON.stringify(result.signals),
+        forecastRunId,
+        regime: null,
       },
     });
 
-    if (result.recommendedQty > 0 && (result.urgency === "critical" || result.urgency === "high")) {
+    if (adjustedRecommendedQty > 0 && (result.urgency === "critical" || result.urgency === "high")) {
       await prisma.order.create({
         data: { tenantId: tenant.id, predictionId: prediction.id, status: "pending" },
       });
@@ -121,7 +121,7 @@ async function main() {
     if (created % 100 === 0) console.log(`  ${created} / ${products.length}`);
   }
 
-  console.log(`Done. ${created} forecasts created.`);
+  console.log(`Done. ${created} forecasts created. forecastRunId=${forecastRunId}`);
 }
 
 main()
