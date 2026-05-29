@@ -29,14 +29,14 @@ A multi-tenant stock-replenishment intelligence platform for Kenyan beauty retai
 
 <!-- Hypotheses until shipped and validated. Building toward these. Driven by the SimplyDone SOW (2026-05-28). -->
 
-#### Foundations
-- [ ] **Existing app boots locally and the mock onboarding → seed → forecast → dashboard flow works end-to-end.** No code changes; establish ground truth before touching anything.
-- [ ] **Forecast determinism** — replace `Math.random()` in `lib/forecast/simulate-layers.ts` with a seeded RNG (mulberry32, keyed on `(productId, runDate)`). Required so model swap tests have a stable baseline.
-- [ ] **Postgres migration** — Prisma `provider = "postgresql"`, real migration history (`prisma migrate`), `prisma/dev.db` (45MB) removed from git, connection string via env, Vercel-ready.
+#### Foundations (Phase 1 — DELIVERED 2026-05-30)
+- ✓ **Existing app boots locally and the mock onboarding → seed → forecast → dashboard flow works end-to-end.** Beauty Square renders 1,023 products / KES 11.6M revenue at `localhost:3082/dashboard`. Verified live on Supabase Postgres. — Phase 1
+- ✓ **Forecast determinism** — `mulberry32(seedFrom([productId, today]))` replaces `Math.random()`. Two consecutive runs return byte-identical `layer1Forecast30d`, `layer2Adjustment`, `safetyStock`, `signals` for the same product. Verified across 5 sampled products. — Phase 1
+- ✓ **Postgres migration** — Prisma `postgresql` provider, two real migrations on Supabase eu-central-1 Frankfurt (baseline + Phase 1 delta), `prisma/dev.db` scrubbed from working tree, DATABASE_URL+DIRECT_URL via Supabase Session Pooler (IPv4-compatible). — Phase 1
 - [ ] **Supabase Auth integration** — email + magic link primary, optional Google OAuth, session middleware for the App Router, replaces the absent auth layer on every `app/api/*` route.
 - [ ] **Multi-tenant tenant resolution** — path-based `/shop/[slug]/...` routing, middleware-injected tenant context, `getTenantId()` helper, eliminate all 12 `prisma.tenant.findFirst()` calls. Webhooks get a narrow domain/realmId resolver.
-- [ ] **A/B/C tiering hardening** — extract `assignAbc()` to `lib/forecast/abc.ts` (kill the API-vs-script duplicate), add `abcOverride` field so owners can pin categories.
-- [ ] **`onOrder` / incoming-quantity tracking** — schema fields on `Product` (and/or PO line items): `quantityOrdered`, `expectedArrivalAt`, `receivedAt`. Surface in dashboard. Reorder math deducts from recommended quantity.
+- ✓ **`assignAbc()` dedupe (Phase 1 portion)** — extracted to `lib/forecast/abc.ts`, single source imported by both the API route and the script. Locked by `npm test`. The `abcOverride` field is still TODO (Phase 5 — ABC-* requirements). — Phase 1
+- ✓ **`onOrder` / incoming-quantity tracking (Phase 1 portion)** — `Product.onOrder` (default 0) + `expectedArrivalAt` + `receivedAt` fields shipped. Reorder math at `lib/forecast/reorder.ts` subtracts `onOrder`. Approve route at `app/api/orders/[id]/approve/route.ts` transactionally bumps `onOrder` by `ceil(recommendedQty)` with idempotency guard. Verified live: Glow Bundle 65 → 0 after one approve. — Phase 1
 - [ ] **Per-tenant timezone** (default `Africa/Nairobi`) stored on `Tenant`, applied to all date-bucketing in forecast + reorder windows.
 - [ ] **Per-supplier currency + KES conversion** — `Supplier.currency` field, FX rate at PO creation captured on the PO line, display in KES for the dashboard.
 - [ ] **Concurrent-rerun protection** — forecast runs and webhook batch jobs can't double-fire for the same tenant; advisory lock or `JobRun` table with status enum.
@@ -161,4 +161,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-28 after SOW integration*
+*Last updated: 2026-05-30 after Phase 1 completion*
