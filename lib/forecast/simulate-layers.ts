@@ -1,4 +1,5 @@
 import { paydayBoost, holidayBoost, isPaydayWeek } from "@/lib/seed/kenya-calendar";
+import { mulberry32, seedFrom } from "./rng";
 import {
   weightedDailyRate,
   daysOfStockRemaining,
@@ -121,6 +122,9 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
+  // Deterministic RNG keyed on (productId, todayISO) per D-06 / FND-02.
+  // Same productId on the same calendar day yields the same noise sequence.
+  const rng = mulberry32(seedFrom([input.productId, today]));
   const last30 = new Date(today);
   last30.setUTCDate(last30.getUTCDate() - 30);
   const last90 = new Date(today);
@@ -159,7 +163,7 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
   const payMult = 1 + (payDays / 30) * 0.6;
   const promoMult = promo.lift;
   const totalMult = holMult * payMult * promoMult;
-  const noise = 0.95 + Math.random() * 0.1;
+  const noise = 0.95 + rng() * 0.1;
   const layer2Final = layer1 * totalMult * noise;
   const layer2Adjustment = layer2Final - layer1;
 

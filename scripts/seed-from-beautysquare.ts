@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { mulberry32, seedFrom } from "../lib/forecast/rng";
+import { SCRAPE_SEED } from "../lib/forecast/rng-constants";
 
 const prisma = new PrismaClient();
 
@@ -58,9 +60,12 @@ export async function seed() {
 
       const sku = variant.sku || `BS-${p.id}-${variant.id}`;
       const imageUrl = p.images[0]?.src || null;
-      const initialStock = Math.floor(20 + Math.random() * 80);
+      // Per-product deterministic rng — re-scrapes of the same product
+      // produce identical initial stock + cost regardless of catalogue order.
+      const rng = mulberry32(seedFrom([SCRAPE_SEED, p.id ?? p.title ?? sku]));
+      const initialStock = Math.floor(20 + rng() * 80);
       // Default cost factor 45-60% of retail; refined by /scripts/backfill-costs.ts once suppliers are assigned.
-      const cost = Math.round(price * (0.45 + Math.random() * 0.15));
+      const cost = Math.round(price * (0.45 + rng() * 0.15));
 
       await prisma.product.upsert({
         where: {

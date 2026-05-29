@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { mulberry32 } from "../lib/forecast/rng";
+import { BACKFILL_SEED } from "../lib/forecast/rng-constants";
 const prisma = new PrismaClient();
 
 // Cost factor (cost as % of retail price) varies by supplier origin.
@@ -22,12 +24,15 @@ async function main() {
     include: { supplier: true },
   });
 
+  // Deterministic cost-band sampler per BACKFILL_SEED.
+  const rng = mulberry32(BACKFILL_SEED);
+
   let updated = 0;
   let totalRetail = 0;
   let totalCost = 0;
   for (const p of products) {
     const [lo, hi] = p.supplier ? (COST_FACTOR_BY_SUPPLIER[p.supplier.name] ?? DEFAULT_FACTOR) : DEFAULT_FACTOR;
-    const factor = lo + Math.random() * (hi - lo);
+    const factor = lo + rng() * (hi - lo);
     const cost = Math.round(p.priceKes * factor);
     await prisma.product.update({ where: { id: p.id }, data: { costKes: cost } });
     totalRetail += p.currentStock * p.priceKes;

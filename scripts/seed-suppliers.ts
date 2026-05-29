@@ -1,4 +1,6 @@
 import { PrismaClient } from "@prisma/client";
+import { mulberry32 } from "../lib/forecast/rng";
+import { SUPPLIER_SEED } from "../lib/forecast/rng-constants";
 const prisma = new PrismaClient();
 
 type SupplierSeed = {
@@ -89,6 +91,9 @@ async function main() {
   const tenant = await prisma.tenant.findFirst();
   if (!tenant) throw new Error("No tenant — seed catalog first");
 
+  // Deterministic round-robin per SUPPLIER_SEED.
+  const rng = mulberry32(SUPPLIER_SEED);
+
   console.log(`Seeding suppliers for tenant ${tenant.id}`);
 
   // Reset suppliers + clear product.supplierId so reseeding is idempotent
@@ -132,7 +137,7 @@ async function main() {
     // Fallback: round-robin across suppliers with share-based weighting
     if (!match) {
       const fallbacks = created.filter(s => (s.seed.share ?? 0) > 0);
-      const r = Math.random();
+      const r = rng();
       let acc = 0;
       for (const f of fallbacks) {
         acc += f.seed.share ?? 0;
