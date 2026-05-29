@@ -3,7 +3,7 @@ phase: 01-boot-determinism-cleanup
 plan: 01
 subsystem: foundation
 tags: [postgres, prisma, migrations, schema, devops]
-status: partial-blocked-on-roy
+status: complete
 dependencies:
   requires: []
   provides:
@@ -62,9 +62,13 @@ metrics:
 
 One-liner: Flipped Prisma to Postgres (with pooler/direct URL split), authored a baseline migration capturing pre-Phase-1 schema, layered Phase 1 schema deltas (onOrder + forecastRunId + regime + composite latest-per-product index), scrubbed prisma/dev.db, replaced `db:push` with `db:migrate` everywhere, and rewrote README for the Postgres-only flow.
 
-## Status: PARTIAL — autonomous portion COMPLETE, manual steps PENDING in RUNBOOK
+## Status: COMPLETE — file changes + migrations applied + dashboard renders on Postgres
 
-All file changes Claude can make without a running database, Docker engine, or browser are committed. The steps that require Roy's shell (Docker up, `.env` fill, `prisma migrate deploy`, `prisma migrate dev` for the delta migration, browser-driven boot check) are documented in `01-01-RUNBOOK.md` and remain TODO.
+All Plan 01-01 work is done. The original "RUNBOOK for Roy" plan changed mid-execution: Roy didn't have Docker, so we switched to Roy's personal Supabase Postgres project (`lkkljxvuhkaydhffpaix`, eu-central-1 Frankfurt, free tier with Session Pooler for IPv4). Both migrations applied to Supabase, seed populated 1023 products + 35,840 sales rows, forecast generated 1023 predictions + 166 auto-orders, dashboard renders end-to-end on port 3082.
+
+## Baseline (Task 0)
+
+**Status: SKIPPED by user decision** — the original §A SQLite baseline boot required rolling back schema/config to pre-Plan-01-01 state. Codex review flagged §A as "belt-and-suspenders." Roy and Claude agreed the §D Postgres boot (below) covers the same FND-01 ground without the rollback/replay dance.
 
 ## Baseline (Task 0)
 
@@ -153,11 +157,45 @@ These shapes are baked into `.env.example` comments so future devs grep them.
 
 None — no UI placeholders or fake data introduced. All schema fields land empty / defaulted and will be populated by Plan 02 (forecast run wiring) + Plan 01-03 (vitest harness + check-determinism).
 
-## Boot Check (FND-01)
+## Boot Check (FND-01) — PASSED
 
-**Status: BLOCKED ON ROY'S SHELL — see RUNBOOK §D.**
+Walked end-to-end via Playwright on `http://localhost:3082/dashboard` against the Supabase Postgres backend on 2026-05-29:
 
-Confirmed mechanically that the file changes line up (verify commands in RUNBOOK §E all pass). The actual `npm run dev` + browser walk-through on Postgres is documented in RUNBOOK §D for Roy. After Roy runs it, paste the productsSeeded count + screenshot path here.
+**Seed (`npm run seed`):**
+- Beauty Square KE tenant created (id `cmprdm3h80000v8q8ojfjn4p3`)
+- 5 pages of Shopify product JSON scraped → **1,023 products** seeded
+- 365-day synthetic sales generated → **35,840 SalesHistory rows**
+
+**Forecast run (POST `/api/forecast/run` via dashboard "Re-run forecasts" button):**
+- **1,023 Prediction rows** written (one per product) — each carries its own auto-defaulted `forecastRunId` for now; Plan 01-02 will replace with a single shared batch ID
+- **166 pending Order rows** auto-created for critical/high urgency SKUs
+- Wall-clock: ~6 minutes (Supabase Frankfurt round-trip dominates; Plan 01-02 batching could shrink this)
+
+**Dashboard (`/dashboard`):**
+- 30-day revenue: **KES 11.6M** at 47% gross margin
+- Reorder tab: **109 items** with full forecast + supplier signals
+- Stockout tab: **130 items**
+- Dead stock tab: **210 SKUs** (KES 6.0M cost / 11.5M retail)
+- Monthly revenue series shows the December spike (KES 15.7M) — proves the Kenya holiday boosts in `lib/seed/kenya-calendar.ts` are correctly seeded and the forecast reads them back
+- Signals visible per card: `🎉 Madaraka Day +30%`, `🎉 Father's Day +150%`, `💰 Payday weeks +20%`
+
+**Proof:** `.planning/phases/01-boot-determinism-cleanup/01-01-dashboard-proof.png` (screenshot taken via Playwright at completion).
+
+## Migration Apply Hiccups (resolved)
+
+Two issues hit during the live Supabase apply, both fixed inline:
+
+1. **Baseline SQL had embedded ASCII-box upgrade banner.** The original `prisma migrate diff --script` output captured Prisma 6.1.0's "Update available 6.1.0 → 7.8.0" banner into the SQL file (lines 201-210). Postgres rejected it with `syntax error at or near "┌──"`. Stripped the banner block, committed at `6460f08`.
+2. **`prisma migrate reset`** required explicit Roy consent via `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` env var (Prisma 6.19's AI agent safety guard). Roy approved; reset cleanly re-applied both migrations.
+
+## Supabase Connection (live)
+
+- Project: `lkkljxvuhkaydhffpaix` (Roy's personal Supabase, free tier)
+- Region: `aws-1-eu-central-1` (Frankfurt — best latency from Nairobi within Supabase's free regions)
+- Connection: **Session Pooler** at `aws-1-eu-central-1.pooler.supabase.com:5432` (IPv4-compatible; direct connection on free tier is IPv6-only, which Roy's Kenyan ISP doesn't route)
+- Username pattern: `postgres.<project-ref>` (pooler convention)
+- Password URL-encoded as `%40Wezesha254` to escape the leading `@`
+- `.env` is gitignored per `.gitignore:34 .env*`; never committed
 
 ## Self-Check: PASSED
 
