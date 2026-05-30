@@ -4,6 +4,7 @@ import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { simulateLayeredForecast, type ActivePromo } from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
+import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 
 export const maxDuration = 120;
 
@@ -22,7 +23,13 @@ export async function POST() {
   // Dashboard pins to the latest forecastRunId per tenant (codex REVIEWS #3).
   const forecastRunId = crypto.randomUUID();
 
-  const today = new Date();
+  // TNT-08: compute the tenant-local day ONCE. runDateKey seeds the simulator
+  // and tags the prediction bucket; todayUtc (tenant-local midnight) anchors all
+  // history/promo windows so two runs in one Nairobi day are identical.
+  const runDateKey = tenantDayKey(tenant.timezone);
+  const todayUtc = tenantTodayUtc(tenant.timezone);
+
+  const today = todayUtc;
   const since = new Date(today);
   since.setUTCFullYear(today.getUTCFullYear() - 1);
 
@@ -81,6 +88,7 @@ export async function POST() {
       leadTimeAvg: leadAvg,
       leadTimeStd: leadStd,
       activePromos: promosShaped,
+      runDateKey,
     });
 
     // FND-04: subtract Product.onOrder so approved-but-not-received POs do
@@ -102,6 +110,7 @@ export async function POST() {
       data: {
         tenantId: tenant.id,
         productId: p.id,
+        runDate: todayUtc,
         layer1Forecast30d: result.layer1Forecast30d,
         layer1Confidence: result.layer1Confidence,
         layer2Adjustment: result.layer2Adjustment,

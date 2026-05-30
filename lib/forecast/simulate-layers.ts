@@ -30,7 +30,22 @@ export type ForecastInput = {
   leadTimeAvg: number;
   leadTimeStd: number;
   activePromos: ActivePromo[];
+  /**
+   * Tenant-local calendar day (YYYY-MM-DD) that anchors BOTH the rng seed and all
+   * internal date math (TNT-08 / D-19). When supplied, two runs at different UTC
+   * instants within the same tenant day produce identical output. When absent,
+   * falls back to wall-clock UTC midnight (Phase 1 / FND-02 behavior).
+   */
+  runDateKey?: string;
 };
+
+/** Anchor "today" on the tenant-local day key when present, else wall-clock UTC midnight. */
+function anchorToday(runDateKey?: string): Date {
+  if (runDateKey) return new Date(`${runDateKey}T00:00:00Z`);
+  const t = new Date();
+  t.setUTCHours(0, 0, 0, 0);
+  return t;
+}
 
 export type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -49,10 +64,8 @@ export type ForecastResult = {
   signals: Signal[];
 };
 
-function seasonalNaive30(history: SalesPoint[]): number {
+function seasonalNaive30(history: SalesPoint[], today: Date): number {
   if (history.length === 0) return 0;
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
   const last30 = new Date(today);
   last30.setUTCDate(last30.getUTCDate() - 30);
   const recent = history.filter(p => p.date >= last30);
@@ -73,9 +86,7 @@ function seasonalNaive30(history: SalesPoint[]): number {
   return weighted;
 }
 
-function lookaheadHolidayBoost(productType: string | null): { boost: number; name: string | null } {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+function lookaheadHolidayBoost(productType: string | null, today: Date): { boost: number; name: string | null } {
   let best = { boost: 1.0, name: null as string | null };
   for (let d = 0; d < 30; d++) {
     const dt = new Date(today);
@@ -86,9 +97,7 @@ function lookaheadHolidayBoost(productType: string | null): { boost: number; nam
   return best;
 }
 
-function lookaheadPaydays(): number {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+function lookaheadPaydays(today: Date): number {
   let payDays = 0;
   for (let d = 0; d < 30; d++) {
     const dt = new Date(today);
@@ -118,13 +127,17 @@ function activePromoLift(promos: ActivePromo[], productType: string | null, vend
 }
 
 export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
-  const layer1 = seasonalNaive30(input.history);
+  // Anchor ALL date math on the tenant-local day (TNT-08). When runDateKey is
+  // supplied, two runs at different UTC instants within one tenant day are
+  // identical; when absent, falls back to wall-clock UTC midnight (FND-02).
+  const today = anchorToday(input.runDateKey);
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  // Deterministic RNG keyed on (productId, todayISO) per D-06 / FND-02.
-  // Same productId on the same calendar day yields the same noise sequence.
-  const rng = mulberry32(seedFrom([input.productId, today]));
+  const layer1 = seasonalNaive30(input.history, today);
+
+  // Deterministic RNG keyed on (productId, tenant-local-day). The runDateKey
+  // STRING is used directly so seedFrom bypasses the UTC toISOString() slice
+  // (Pitfall 7); without it, the Date falls back to UTC-day per D-06.
+  const rng = mulberry32(seedFrom([input.productId, input.runDateKey ?? today]));
   const last30 = new Date(today);
   last30.setUTCDate(last30.getUTCDate() - 30);
   const last90 = new Date(today);
@@ -139,14 +152,14 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
 
   const signals: Signal[] = [];
 
-  const hol = lookaheadHolidayBoost(input.productType);
+  const hol = lookaheadHolidayBoost(input.productType, today);
   if (hol.boost > 1.05) {
     const delta = (hol.boost - 1) * 100;
     const emoji = hol.name?.includes("Christmas") ? "🎄" : hol.name?.includes("Valentine") ? "💝" : hol.name?.includes("Eid") ? "🌙" : "🎉";
     signals.push({ label: `${hol.name} +${delta.toFixed(0)}%`, deltaPct: delta, emoji });
   }
 
-  const payDays = lookaheadPaydays();
+  const payDays = lookaheadPaydays(today);
   if (payDays > 0) {
     const payLift = 1 + (payDays / 30) * 0.6;
     if (payLift > 1.02) {
