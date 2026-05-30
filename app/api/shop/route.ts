@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { slugify } from "@/lib/tenant/slug";
 import { z } from "zod";
 
 const schema = z.object({
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
         data: { name, shopifyDomain, shopifyAccessToken: shopifyAccessToken || null },
       })
     : await prisma.tenant.create({
-        data: { name, shopifyDomain, shopifyAccessToken: shopifyAccessToken || null, currency: "KES" },
+        data: { name, slug: slugify(name), shopifyDomain, shopifyAccessToken: shopifyAccessToken || null, currency: "KES" },
       });
 
   return NextResponse.json({ id: tenant.id, name: tenant.name });

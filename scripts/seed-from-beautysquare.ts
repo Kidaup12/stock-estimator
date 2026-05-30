@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { mulberry32, seedFrom } from "../lib/forecast/rng";
 import { SCRAPE_SEED } from "../lib/forecast/rng-constants";
+import { slugify } from "../lib/tenant/slug";
 
 const prisma = new PrismaClient();
 
@@ -40,7 +41,7 @@ export async function seed() {
   let tenant = await prisma.tenant.findFirst();
   if (!tenant) {
     tenant = await prisma.tenant.create({
-      data: { name: TENANT_NAME, shopifyDomain: SHOPIFY_DOMAIN, currency: "KES" },
+      data: { name: TENANT_NAME, slug: slugify(TENANT_NAME), shopifyDomain: SHOPIFY_DOMAIN, currency: "KES" },
     });
   }
 
