@@ -44,7 +44,7 @@
 **Plans**: 6 plans
 - [x] 02-01-PLAN.md — Schema: Tenant.slug + timezone + Membership + Role enum (2-step migration) + slugify
 - [x] 02-02-PLAN.md — Supabase Auth wiring: 3 cookie clients + middleware session refresh + /login + auth callback + signout
-- [ ] 02-03-PLAN.md — requireTenant() chokepoint + middleware header injection + 16 findFirst migrations + move pages under /shop/[slug] + webhook resolver
+- [x] 02-03-PLAN.md — requireTenant() chokepoint + middleware header injection + 16 findFirst migrations + move pages under /shop/[slug] + webhook resolver
 - [ ] 02-04-PLAN.md — Tenant timezone date helper + thread runDateKey through seed/bucket (determinism-safe) + tz determinism test
 - [ ] 02-05-PLAN.md — Beauty Square backfill + Create-your-shop onboarding + root membership redirect
 - [ ] 02-06-PLAN.md — tenant-safety ESLint rule + 2-tenant isolation test + tenant-scoped cache helper
