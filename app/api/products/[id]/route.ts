@@ -17,12 +17,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const since = new Date();
   since.setUTCFullYear(since.getUTCFullYear() - 1);
   const history = await prisma.salesHistory.findMany({
-    where: { productId: id, date: { gte: since } },
+    where: { productId: id, tenantId: tenant.id, date: { gte: since } },
     orderBy: { date: "asc" },
   });
 
   const prediction = await prisma.prediction.findFirst({
-    where: { productId: id },
+    where: { productId: id, tenantId: tenant.id },
     orderBy: { runDate: "desc" },
     include: { orders: { orderBy: { createdAt: "desc" }, take: 1 } },
   });

@@ -7,7 +7,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts", "scripts/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "scripts/**/*.test.ts", "tests/**/*.test.ts"],
     reporters: ["verbose"],
   },
 });
