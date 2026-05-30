@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
 export async function GET() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ predictions: [], monthlyRevenue: [], summary: null });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

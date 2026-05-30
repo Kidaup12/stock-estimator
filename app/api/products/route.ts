@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
 export async function GET(req: NextRequest) {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ products: [] });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const url = new URL(req.url);
   const vendor = url.searchParams.get("vendor");

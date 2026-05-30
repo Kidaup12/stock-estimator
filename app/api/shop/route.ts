@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { slugify } from "@/lib/tenant/slug";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { z } from "zod";
 
 const schema = z.object({
@@ -10,8 +10,9 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json(null);
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
   return NextResponse.json({
     id: tenant.id,
     name: tenant.name,
@@ -22,6 +23,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -29,15 +34,13 @@ export async function POST(req: NextRequest) {
   }
   const { name, shopifyDomain, shopifyAccessToken } = parsed.data;
 
-  const existing = await prisma.tenant.findFirst();
-  const tenant = existing
-    ? await prisma.tenant.update({
-        where: { id: existing.id },
-        data: { name, shopifyDomain, shopifyAccessToken: shopifyAccessToken || null },
-      })
-    : await prisma.tenant.create({
-        data: { name, slug: slugify(name), shopifyDomain, shopifyAccessToken: shopifyAccessToken || null, currency: "KES" },
-      });
+  // Update the RESOLVED tenant only — never blind-create a second tenant from a
+  // findFirst (the old single-tenant overwrite bug). Tenant CREATION lives in
+  // the onboarding flow (Plan 05), NOT here.
+  const updated = await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: { name, shopifyDomain, shopifyAccessToken: shopifyAccessToken || null },
+  });
 
-  return NextResponse.json({ id: tenant.id, name: tenant.name });
+  return NextResponse.json({ id: updated.id, name: updated.name });
 }

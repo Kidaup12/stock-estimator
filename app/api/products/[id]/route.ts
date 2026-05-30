@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const product = await prisma.product.findFirst({
     where: { id, tenantId: tenant.id },

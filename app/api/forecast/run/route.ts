@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { simulateLayeredForecast, type ActivePromo } from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
@@ -7,8 +8,9 @@ import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder"
 export const maxDuration = 120;
 
 export async function POST() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const products = await prisma.product.findMany({
     where: { tenantId: tenant.id },

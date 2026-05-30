@@ -25,3 +25,25 @@ export function withTenant<C extends RouteCtx>(handler: TenantHandler<C>) {
     }
   };
 }
+
+/**
+ * Imperative variant for handlers that keep `export async function GET/POST`.
+ * Returns the resolved TenantContext, OR a ready-to-return NextResponse when
+ * the request is unauthorized/forbidden. Usage:
+ *
+ *   const auth = await requireTenantOrResponse();
+ *   if (auth instanceof NextResponse) return auth;
+ *   const { tenant } = auth;
+ */
+export async function requireTenantOrResponse(
+  slugArg?: string
+): Promise<TenantContext | NextResponse> {
+  try {
+    return await requireTenant(slugArg);
+  } catch (e) {
+    if (e instanceof TenantError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    throw e;
+  }
+}

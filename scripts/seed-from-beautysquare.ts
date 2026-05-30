@@ -37,9 +37,12 @@ async function fetchPage(page: number): Promise<ShopifyProduct[]> {
   return data.products as ShopifyProduct[];
 }
 
-export async function seed() {
-  let tenant = await prisma.tenant.findFirst();
+export async function seed(tenantId?: string) {
+  let tenant = tenantId
+    ? await prisma.tenant.findUnique({ where: { id: tenantId } })
+    : await prisma.tenant.findFirst();
   if (!tenant) {
+    if (tenantId) throw new Error(`Tenant ${tenantId} not found`);
     tenant = await prisma.tenant.create({
       data: { name: TENANT_NAME, slug: slugify(TENANT_NAME), shopifyDomain: SHOPIFY_DOMAIN, currency: "KES" },
     });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { z } from "zod";
 
 const schema = z.object({
@@ -15,8 +16,9 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ promos: [] });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
   const promos = await prisma.promo.findMany({
     where: { tenantId: tenant.id },
     orderBy: { startDate: "desc" },
@@ -25,8 +27,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const body = await req.json();
   const parsed = schema.safeParse(body);
@@ -39,8 +42,14 @@ export async function POST(req: NextRequest) {
     endDate: new Date(endDate),
   };
 
-  const promo = id
-    ? await prisma.promo.update({ where: { id }, data })
-    : await prisma.promo.create({ data: { ...data, tenantId: tenant.id } });
+  let promo;
+  if (id) {
+    // Tenant-scope the update: a foreign/missing promo returns 404, never mutates.
+    const existing = await prisma.promo.findFirst({ where: { id, tenantId: tenant.id } });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    promo = await prisma.promo.update({ where: { id }, data });
+  } else {
+    promo = await prisma.promo.create({ data: { ...data, tenantId: tenant.id } });
+  }
   return NextResponse.json({ promo });
 }

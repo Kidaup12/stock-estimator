@@ -30,8 +30,10 @@ function rankToBaseRate(rank: number, total: number, rng: Rng): number {
   return rng() < 0.5 ? 0 : 0.001 + rng() * 0.008;
 }
 
-export async function synth() {
-  const tenant = await prisma.tenant.findFirst();
+export async function synth(tenantId?: string) {
+  const tenant = tenantId
+    ? await prisma.tenant.findUnique({ where: { id: tenantId } })
+    : await prisma.tenant.findFirst();
   if (!tenant) throw new Error("No tenant — run scrape seed first");
 
   const products = await prisma.product.findMany({ where: { tenantId: tenant.id } });

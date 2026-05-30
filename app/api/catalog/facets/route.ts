@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
 export async function GET() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ categories: [], brands: [] });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const products = await prisma.product.findMany({
     where: { tenantId: tenant.id },

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { z } from "zod";
 
 const schema = z.object({
@@ -12,8 +13,9 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ contexts: [] });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
   const contexts = await prisma.monthlyContext.findMany({
     where: { tenantId: tenant.id },
     orderBy: { month: "desc" },
@@ -22,8 +24,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const body = await req.json();
   const parsed = schema.safeParse(body);

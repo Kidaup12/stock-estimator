@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { z } from "zod";
 
 const schema = z.object({
@@ -19,8 +20,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   const { budgetKes } = parsed.data;
 
-  const tenant = await prisma.tenant.findFirst();
-  if (!tenant) return NextResponse.json({ error: "No tenant" }, { status: 400 });
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
 
   const predictions = await prisma.prediction.findMany({
     where: { tenantId: tenant.id, recommendedQty: { gt: 0 } },

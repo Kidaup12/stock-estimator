@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
 export async function POST(
   _req: NextRequest,
@@ -7,9 +8,15 @@ export async function POST(
 ) {
   const { id } = await params;
 
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
+
   const result = await prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({
-      where: { id },
+    // W1: tenant-scope the order lookup — a foreign/missing order returns 404,
+    // never approves another tenant's order.
+    const order = await tx.order.findFirst({
+      where: { id, tenantId: tenant.id },
       include: { prediction: true },
     });
     if (!order) {
