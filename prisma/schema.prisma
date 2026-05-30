@@ -9,24 +9,40 @@ datasource db {
 }
 
 model Tenant {
-  id                  String   @id @default(cuid())
-  name                String
-  shopifyDomain       String
-  shopifyAccessToken  String?
-  currency            String   @default("KES")
-  createdAt           DateTime @default(now())
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String?  @unique
+  timezone           String   @default("Africa/Nairobi")
+  shopifyDomain      String
+  shopifyAccessToken String?
+  currency           String   @default("KES")
+  createdAt          DateTime @default(now())
 
-  products            Product[]
-  salesHistory        SalesHistory[]
-  predictions         Prediction[]
-  orders              Order[]
-  suppliers           Supplier[]
-  promos              Promo[]
-  monthlyContext      MonthlyContext[]
+  products       Product[]
+  salesHistory   SalesHistory[]
+  predictions    Prediction[]
+  orders         Order[]
+  suppliers      Supplier[]
+  promos         Promo[]
+  monthlyContext MonthlyContext[]
+  memberships    Membership[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String // Supabase auth.users UUID — plain String, NO FK (D-13)
+  tenantId  String
+  role      Role     @default(OWNER)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
 }
 
 model Product {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   tenantId          String
   shopifyProductId  String
   shopifyVariantId  String
@@ -34,22 +50,22 @@ model Product {
   title             String
   vendor            String?
   productType       String?
-  priceKes          Float    @default(0)
-  costKes           Float    @default(0)
+  priceKes          Float     @default(0)
+  costKes           Float     @default(0)
   imageUrl          String?
-  currentStock      Float    @default(0)
+  currentStock      Float     @default(0)
   abcCategory       String?
-  dailySalesRate    Float    @default(0)
-  lastSynced        DateTime @default(now())
+  dailySalesRate    Float     @default(0)
+  lastSynced        DateTime  @default(now())
   supplierId        String?
-  onOrder           Int      @default(0)
+  onOrder           Int       @default(0)
   expectedArrivalAt DateTime?
   receivedAt        DateTime?
 
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier          Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  salesHistory      SalesHistory[]
-  predictions       Prediction[]
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier     Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  salesHistory SalesHistory[]
+  predictions  Prediction[]
 
   @@unique([tenantId, shopifyProductId])
   @@index([tenantId])
@@ -58,97 +74,97 @@ model Product {
 }
 
 model SalesHistory {
-  id          String   @id @default(cuid())
-  tenantId    String
-  productId   String
-  date        DateTime
-  quantity    Float
-  revenueKes  Float
-  channel     String   @default("shopify")
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  date       DateTime
+  quantity   Float
+  revenueKes Float
+  channel    String   @default("shopify")
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([productId, date, channel])
   @@index([tenantId, date])
 }
 
 model Supplier {
-  id                String   @id @default(cuid())
-  tenantId          String
-  name              String
-  country           String?
-  currency          String   @default("USD")
-  leadTimeAvgDays   Int      @default(30)
-  leadTimeStdDays   Int      @default(7)
-  moq               Int      @default(1)
-  notes             String?
-  createdAt         DateTime @default(now())
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  country         String?
+  currency        String   @default("USD")
+  leadTimeAvgDays Int      @default(30)
+  leadTimeStdDays Int      @default(7)
+  moq             Int      @default(1)
+  notes           String?
+  createdAt       DateTime @default(now())
 
-  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products          Product[]
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products Product[]
 
   @@index([tenantId])
 }
 
 model Promo {
-  id            String   @id @default(cuid())
-  tenantId      String
-  startDate     DateTime
-  endDate       DateTime
-  scope         String   @default("all")
-  scopeValue    String?
-  discountPct   Float    @default(0)
-  promoType     String   @default("flash")
-  channel       String   @default("all")
-  notes         String?
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  tenantId    String
+  startDate   DateTime
+  endDate     DateTime
+  scope       String   @default("all")
+  scopeValue  String?
+  discountPct Float    @default(0)
+  promoType   String   @default("flash")
+  channel     String   @default("all")
+  notes       String?
+  createdAt   DateTime @default(now())
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, startDate])
 }
 
 model MonthlyContext {
-  id                    String   @id @default(cuid())
-  tenantId              String
-  month                 String
-  marketingBudget       Float?
-  promotions            String?
-  seasonalExpectation   String?
-  cashFlow              String?
-  notes                 String?
-  createdAt             DateTime @default(now())
+  id                  String   @id @default(cuid())
+  tenantId            String
+  month               String
+  marketingBudget     Float?
+  promotions          String?
+  seasonalExpectation String?
+  cashFlow            String?
+  notes               String?
+  createdAt           DateTime @default(now())
 
-  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, month])
 }
 
 model Prediction {
-  id                  String   @id @default(cuid())
-  tenantId            String
-  productId           String
-  runDate             DateTime @default(now())
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  runDate   DateTime @default(now())
 
-  layer1Forecast30d   Float
-  layer1Confidence    Float
-  layer2Adjustment    Float
-  finalForecast30d    Float
-  daysUntilStockout   Int
-  recommendedQty      Float
-  safetyStock         Float
-  reorderPoint        Float
-  confidence          Float
-  reasoning           String
-  urgency             String
-  signals             String
-  forecastRunId       String   @default(cuid())
-  regime              String?
+  layer1Forecast30d Float
+  layer1Confidence  Float
+  layer2Adjustment  Float
+  finalForecast30d  Float
+  daysUntilStockout Int
+  recommendedQty    Float
+  safetyStock       Float
+  reorderPoint      Float
+  confidence        Float
+  reasoning         String
+  urgency           String
+  signals           String
+  forecastRunId     String  @default(cuid())
+  regime            String?
 
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product             Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orders              Order[]
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orders  Order[]
 
   @@index([tenantId, runDate])
   @@index([productId, runDate])
@@ -156,17 +172,22 @@ model Prediction {
 }
 
 model Order {
-  id                    String   @id @default(cuid())
-  tenantId              String
-  predictionId          String
-  status                String   @default("pending")
-  shopifyDraftOrderId   String?
-  approvedAt            DateTime?
-  skipReason            String?
-  createdAt             DateTime @default(now())
+  id                  String    @id @default(cuid())
+  tenantId            String
+  predictionId        String
+  status              String    @default("pending")
+  shopifyDraftOrderId String?
+  approvedAt          DateTime?
+  skipReason          String?
+  createdAt           DateTime  @default(now())
 
-  tenant                Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  prediction            Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prediction Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status])
+}
+
+enum Role {
+  OWNER
+  MEMBER
 }
