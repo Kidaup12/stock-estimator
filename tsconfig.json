@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
     "plugins": [
       {
@@ -40,7 +40,6 @@
     "node_modules",
     "app inspo",
     "app/(app)",
-    "app/login",
     "app/showroom"
   ]
 }

@@ -48,7 +48,6 @@ prisma/dev.db-journal
 # design inspiration files (kept locally, not part of build)
 app inspo/
 app/(app)/
-app/login/
 app/showroom/
 
 .vercel
