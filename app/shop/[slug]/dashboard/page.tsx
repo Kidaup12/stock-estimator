@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -65,6 +67,7 @@ const KESshort = (n: number) => {
 type Tab = "reorder" | "stockout" | "dead" | "all";
 
 export default function Dashboard() {
+  const { slug } = useParams<{ slug: string }>();
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [summary, setSummary] = useState<Summary>(null);
   const [monthly, setMonthly] = useState<MonthlyRow[]>([]);
@@ -75,7 +78,7 @@ export default function Dashboard() {
 
   async function load() {
     setLoading(true);
-    const res = await fetch("/api/forecast");
+    const res = await apiFetch(slug, "/api/forecast");
     const data = await res.json();
     setPredictions(data.predictions || []);
     setSummary(data.summary || null);
@@ -86,7 +89,7 @@ export default function Dashboard() {
 
   async function rerun() {
     setBusy(true);
-    await fetch("/api/forecast/run", { method: "POST" });
+    await apiFetch(slug, "/api/forecast/run", { method: "POST" });
     await load();
     setBusy(false);
   }
@@ -140,13 +143,13 @@ export default function Dashboard() {
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Live</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/simulate" className="btn-ghost">Simulate</Link>
-            <Link href="/reports" className="btn-ghost">Reports</Link>
-            <Link href="/promos" className="btn-ghost">Promos</Link>
-            <Link href="/suppliers" className="btn-ghost">Suppliers</Link>
+            <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
+            <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
+            <Link href={`/shop/${slug}/promos`} className="btn-ghost">Promos</Link>
+            <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
             <Link href="/pricing" className="btn-ghost">Pricing</Link>
             <Link href="/contact" className="btn-ghost">Contact</Link>
-            <Link href="/settings" className="btn-ghost">Settings</Link>
+            <Link href={`/shop/${slug}/settings`} className="btn-ghost">Settings</Link>
             <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
               {busy ? "Running…" : "Re-run forecasts"}
             </button>
@@ -224,7 +227,7 @@ export default function Dashboard() {
               <p className="text-ink-soft mt-3 mb-6 max-w-md mx-auto text-sm leading-relaxed">
                 Connect a shop and seed your catalogue from Settings.
               </p>
-              <Link href="/settings" className="btn-accent inline-flex">Go to Settings</Link>
+              <Link href={`/shop/${slug}/settings`} className="btn-accent inline-flex">Go to Settings</Link>
             </div>
           ) : (
             <div className="text-center py-14 text-mute text-sm">Nothing in this tab.</div>
@@ -282,11 +285,12 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
 }
 
 function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stockout" }) {
+  const { slug } = useParams<{ slug: string }>();
   const isOut = variant === "stockout";
   const borderTone = isOut ? "border-status-bad/40 bg-red-50/40" : "border-status-warn/40 bg-amber-50/40";
   return (
     <Link
-      href={`/dashboard/product/${p.product.id}`}
+      href={`/shop/${slug}/dashboard/product/${p.product.id}`}
       className={`card hover:shadow-lift transition border ${borderTone} block`}
     >
       <div className="p-4 sm:p-5 flex gap-4">
@@ -346,6 +350,7 @@ function Mini({ label, value, sub, tone = "default" }: { label: string; value: s
 }
 
 function DeadStockTable({ predictions, totalCostKes, totalRetailKes }: { predictions: Prediction[]; totalCostKes: number; totalRetailKes: number }) {
+  const { slug } = useParams<{ slug: string }>();
   return (
     <>
       <div className="card p-5 mb-4 grid grid-cols-2 gap-6">
@@ -378,7 +383,7 @@ function DeadStockTable({ predictions, totalCostKes, totalRetailKes }: { predict
               {predictions.map(p => (
                 <tr key={p.id} className="hover:bg-canvas">
                   <td className="px-5 py-3">
-                    <Link href={`/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
+                    <Link href={`/shop/${slug}/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
                     <div className="text-2xs text-mute num">{p.product.sku}</div>
                   </td>
                   <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>
@@ -398,6 +403,7 @@ function DeadStockTable({ predictions, totalCostKes, totalRetailKes }: { predict
 }
 
 function AllTable({ predictions }: { predictions: Prediction[] }) {
+  const { slug } = useParams<{ slug: string }>();
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
@@ -418,7 +424,7 @@ function AllTable({ predictions }: { predictions: Prediction[] }) {
             {predictions.map(p => (
               <tr key={p.id} className="hover:bg-canvas">
                 <td className="px-5 py-3">
-                  <Link href={`/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
+                  <Link href={`/shop/${slug}/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
                   <div className="text-2xs text-mute num">{p.product.sku}</div>
                 </td>
                 <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>

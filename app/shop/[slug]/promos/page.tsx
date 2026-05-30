@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Promo = {
   id: string;
@@ -40,12 +42,13 @@ const emptyForm: PromoForm = {
 };
 
 export default function PromosPage() {
+  const { slug } = useParams<{ slug: string }>();
   const [promos, setPromos] = useState<Promo[]>([]);
   const [editing, setEditing] = useState<PromoForm | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/promos");
+    const res = await apiFetch(slug, "/api/promos");
     const data = await res.json();
     setPromos(data.promos || []);
   }
@@ -54,7 +57,7 @@ export default function PromosPage() {
   async function save() {
     if (!editing) return;
     setSaving(true);
-    const res = await fetch("/api/promos", {
+    const res = await apiFetch(slug, "/api/promos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -77,7 +80,7 @@ export default function PromosPage() {
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
             ← Dashboard
           </Link>
           <div className="flex items-baseline gap-2.5">

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Supplier = {
   id: string;
@@ -25,12 +27,13 @@ const empty: Omit<Supplier, "id"> & { id?: string } = {
 };
 
 export default function SuppliersPage() {
+  const { slug } = useParams<{ slug: string }>();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [editing, setEditing] = useState<typeof empty | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    const res = await fetch("/api/suppliers");
+    const res = await apiFetch(slug, "/api/suppliers");
     const data = await res.json();
     setSuppliers(data.suppliers || []);
   }
@@ -39,7 +42,7 @@ export default function SuppliersPage() {
   async function save() {
     if (!editing) return;
     setSaving(true);
-    const res = await fetch("/api/suppliers", {
+    const res = await apiFetch(slug, "/api/suppliers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -62,7 +65,7 @@ export default function SuppliersPage() {
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
             ← Dashboard
           </Link>
           <div className="flex items-baseline gap-2.5">

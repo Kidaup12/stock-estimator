@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type ShopInfo = {
   id: string;
@@ -36,6 +38,7 @@ const emptyContext: MonthlyContext = {
 };
 
 export default function SettingsPage() {
+  const { slug } = useParams<{ slug: string }>();
   const [shop, setShop] = useState<ShopInfo>(null);
   const [form, setForm] = useState({
     name: "Beauty Square KE",
@@ -57,8 +60,8 @@ export default function SettingsPage() {
   async function load() {
     setLoading(true);
     const [shopRes, ctxRes] = await Promise.all([
-      fetch("/api/shop").then(r => r.json()),
-      fetch("/api/monthly-context").then(r => r.json()),
+      apiFetch(slug, "/api/shop").then(r => r.json()),
+      apiFetch(slug, "/api/monthly-context").then(r => r.json()),
     ]);
     if (shopRes) {
       setShop(shopRes);
@@ -75,7 +78,7 @@ export default function SettingsPage() {
     setSavingContext(true);
     setContextSaved(null);
     try {
-      const res = await fetch("/api/monthly-context", {
+      const res = await apiFetch(slug, "/api/monthly-context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -106,7 +109,7 @@ export default function SettingsPage() {
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch("/api/shop/test", {
+      const res = await apiFetch(slug, "/api/shop/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shopifyDomain: form.shopifyDomain, shopifyAccessToken: form.shopifyAccessToken }),
@@ -124,7 +127,7 @@ export default function SettingsPage() {
   async function saveShop() {
     setSaving(true);
     try {
-      const res = await fetch("/api/shop", {
+      const res = await apiFetch(slug, "/api/shop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -139,7 +142,7 @@ export default function SettingsPage() {
     setSeeding(true);
     setSeedResult(null);
     try {
-      const res = await fetch("/api/seed", { method: "POST" });
+      const res = await apiFetch(slug, "/api/seed", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setSeedResult(`Error: ${data.error}`); return; }
       setSeedResult(`Seeded ${data.productsSeeded} products with 12 months of synthetic sales.`);
@@ -154,7 +157,7 @@ export default function SettingsPage() {
     setForecasting(true);
     setForecastResult(null);
     try {
-      const res = await fetch("/api/forecast/run", { method: "POST" });
+      const res = await apiFetch(slug, "/api/forecast/run", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setForecastResult(`Error: ${data.error}`); return; }
       setForecastResult(`Generated ${data.forecastsCreated} forecasts (Layer 1 SARIMA + Layer 2 XGBoost — both mock).`);
@@ -169,7 +172,7 @@ export default function SettingsPage() {
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
             ← Dashboard
           </Link>
           <div className="flex items-baseline gap-2.5">
@@ -190,7 +193,7 @@ export default function SettingsPage() {
           <ul className="text-sm text-ink-soft mt-3 space-y-1.5 leading-relaxed">
             <li>· <strong>Automatic:</strong> daily catalogue + sales sync from Shopify, weekly forecast refresh (Mon 6am).</li>
             <li>· <strong>You input monthly:</strong> the context form below (marketing spend, promos, cash flow, big events).</li>
-            <li>· <strong>You input occasionally:</strong> <Link href="/suppliers" className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href="/promos" className="text-accent-700 hover:underline">promo calendar</Link>, supplier-per-product on each product page.</li>
+            <li>· <strong>You input occasionally:</strong> <Link href={`/shop/${slug}/suppliers`} className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href={`/shop/${slug}/promos`} className="text-accent-700 hover:underline">promo calendar</Link>, supplier-per-product on each product page.</li>
             <li>· <strong>One-time:</strong> Shopify connection + initial catalogue seed below.</li>
           </ul>
         </div>
@@ -302,8 +305,8 @@ export default function SettingsPage() {
 
           <Section title="Other settings">
             <div className="grid grid-cols-2 gap-3">
-              <Link href="/suppliers" className="btn-ghost justify-center">Suppliers</Link>
-              <Link href="/promos" className="btn-ghost justify-center">Promo calendar</Link>
+              <Link href={`/shop/${slug}/suppliers`} className="btn-ghost justify-center">Suppliers</Link>
+              <Link href={`/shop/${slug}/promos`} className="btn-ghost justify-center">Promo calendar</Link>
             </div>
           </Section>
         </div>

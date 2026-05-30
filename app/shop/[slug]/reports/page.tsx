@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Monthly = { month: string; quantity: number; revenueKes: number; cogsKes: number; grossProfitKes: number };
 type Slice = { name: string; revenue: number; cogs: number; grossProfit: number; marginPct: number; qty: number; count: number };
@@ -33,11 +35,12 @@ const KESshort = (n: number) => {
 const PALETTE = ["#7a68e2", "#6d5cd6", "#5a4bbf", "#443697", "#ada0f5", "#8e7eea", "#cfc6ff", "#e6e2ff"];
 
 export default function ReportsPage() {
+  const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/reports").then(r => r.json()).then(d => { setData(d); setLoading(false); });
+    apiFetch(slug, "/api/reports").then(r => r.json()).then(d => { setData(d); setLoading(false); });
   }, []);
 
   if (loading || !data) {
@@ -62,7 +65,7 @@ export default function ReportsPage() {
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
             ← Dashboard
           </Link>
           <div className="flex items-baseline gap-2.5">
@@ -198,7 +201,7 @@ export default function ReportsPage() {
                 {data.topMovers.map(m => (
                   <tr key={m.id} className="hover:bg-canvas">
                     <td className="px-5 py-2.5">
-                      <Link href={`/dashboard/product/${m.id}`} className="font-medium hover:underline truncate block max-w-xs">{m.title}</Link>
+                      <Link href={`/shop/${slug}/dashboard/product/${m.id}`} className="font-medium hover:underline truncate block max-w-xs">{m.title}</Link>
                       <div className="text-2xs text-mute">{m.vendor || "—"} · {m.productType || "—"}</div>
                     </td>
                     <td className="px-5 py-2.5 text-right num">{m.qty30.toFixed(0)}</td>
@@ -222,7 +225,7 @@ export default function ReportsPage() {
                 {data.slowMovers.map(s => (
                   <tr key={s.id} className="hover:bg-canvas">
                     <td className="px-5 py-2.5">
-                      <Link href={`/dashboard/product/${s.id}`} className="font-medium hover:underline truncate block max-w-xs">{s.title}</Link>
+                      <Link href={`/shop/${slug}/dashboard/product/${s.id}`} className="font-medium hover:underline truncate block max-w-xs">{s.title}</Link>
                       <div className="text-2xs text-mute">{s.vendor || "—"} · {s.productType || "—"}</div>
                     </td>
                     <td className="px-5 py-2.5 text-right num">{s.stock.toFixed(0)}</td>

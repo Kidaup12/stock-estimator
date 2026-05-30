@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Facet = { name: string; count: number };
 
@@ -89,6 +91,7 @@ const PRESET_EVENTS = [
 ];
 
 export default function SimulatePage() {
+  const { slug } = useParams<{ slug: string }>();
   const [facets, setFacets] = useState<{ categories: Facet[]; brands: Facet[] }>({ categories: [], brands: [] });
 
   // Budget allocator state
@@ -106,12 +109,12 @@ export default function SimulatePage() {
   const [runningShock, setRunningShock] = useState(false);
 
   useEffect(() => {
-    fetch("/api/catalog/facets").then(r => r.json()).then(setFacets);
+    apiFetch(slug, "/api/catalog/facets").then(r => r.json()).then(setFacets);
   }, []);
 
   async function runBudget() {
     setRunningBudget(true);
-    const res = await fetch("/api/simulate/budget", {
+    const res = await apiFetch(slug, "/api/simulate/budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ budgetKes: parseFloat(budgetInput) }),
@@ -131,7 +134,7 @@ export default function SimulatePage() {
 
   async function runShock() {
     setRunningShock(true);
-    const res = await fetch("/api/simulate/demand-shock", {
+    const res = await apiFetch(slug, "/api/simulate/demand-shock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -151,7 +154,7 @@ export default function SimulatePage() {
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
+          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
             ← Dashboard
           </Link>
           <div className="flex items-baseline gap-2.5">
@@ -336,7 +339,7 @@ export default function SimulatePage() {
                     {shockResult.items.slice(0, 50).map(it => (
                       <tr key={it.productId} className="hover:bg-canvas">
                         <td className="px-5 py-2.5">
-                          <Link href={`/dashboard/product/${it.productId}`} className="font-medium hover:underline truncate block max-w-xs">{it.title}</Link>
+                          <Link href={`/shop/${slug}/dashboard/product/${it.productId}`} className="font-medium hover:underline truncate block max-w-xs">{it.title}</Link>
                           <div className="text-2xs text-mute">{it.vendor || "—"} · {it.productType || "—"}</div>
                         </td>
                         <td className="px-5 py-2.5 text-2xs text-ink-soft">{it.supplierName || "—"}</td>
@@ -376,6 +379,7 @@ function Kpi({ label, value, hint, tone = "default" }: { label: string; value: s
 }
 
 function BudgetList({ title, items, tone }: { title: string; items: BudgetItem[]; tone: "accent" | "muted" }) {
+  const { slug } = useParams<{ slug: string }>();
   return (
     <div className="card overflow-hidden">
       <div className={`px-4 py-3 border-b border-line ${tone === "accent" ? "bg-accent-50" : "bg-canvas-tint"}`}>
@@ -386,7 +390,7 @@ function BudgetList({ title, items, tone }: { title: string; items: BudgetItem[]
           <div className="px-4 py-8 text-center text-2xs text-mute">Nothing here</div>
         )}
         {items.slice(0, 100).map(it => (
-          <Link href={`/dashboard/product/${it.productId}`} key={it.predictionId} className="block px-4 py-2.5 hover:bg-canvas">
+          <Link href={`/shop/${slug}/dashboard/product/${it.productId}`} key={it.predictionId} className="block px-4 py-2.5 hover:bg-canvas">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{it.title}</div>
