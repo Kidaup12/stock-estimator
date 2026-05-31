@@ -13,19 +13,21 @@ model Tenant {
   name               String
   slug               String   @unique
   timezone           String   @default("Africa/Nairobi")
-  shopifyDomain      String
+  shopifyDomain      String?  @unique
   shopifyAccessToken String?
   currency           String   @default("KES")
   createdAt          DateTime @default(now())
 
-  products       Product[]
-  salesHistory   SalesHistory[]
-  predictions    Prediction[]
-  orders         Order[]
-  suppliers      Supplier[]
-  promos         Promo[]
-  monthlyContext MonthlyContext[]
-  memberships    Membership[]
+  products          Product[]
+  salesHistory      SalesHistory[]
+  predictions       Prediction[]
+  orders            Order[]
+  suppliers         Supplier[]
+  promos            Promo[]
+  monthlyContext    MonthlyContext[]
+  memberships       Membership[]
+  shopifyConnection ShopifyConnection?
+  locations         Location[]
 }
 
 model Membership {
@@ -62,10 +64,11 @@ model Product {
   expectedArrivalAt DateTime?
   receivedAt        DateTime?
 
-  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier     Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  salesHistory SalesHistory[]
-  predictions  Prediction[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  salesHistory    SalesHistory[]
+  predictions     Prediction[]
+  inventoryLevels InventoryLevel[]
 
   @@unique([tenantId, shopifyProductId])
   @@index([tenantId])
@@ -190,4 +193,77 @@ model Order {
 enum Role {
   OWNER
   MEMBER
+}
+
+// Required by @shopify/shopify-app-session-storage-prisma@9. Confirm exact field
+// set against the adapter README at execute time (Open Question #3).
+model Session {
+  id          String    @id
+  shop        String
+  state       String
+  isOnline    Boolean   @default(false)
+  scope       String?
+  expires     DateTime?
+  accessToken String?
+  userId      BigInt?
+}
+
+model ShopifyConnection {
+  id            String    @id @default(cuid())
+  tenantId      String    @unique
+  shopDomain    String    @unique // <store>.myshopify.com
+  accessToken   String // AES-256-GCM ciphertext (encrypt()/decrypt())
+  scope         String
+  installedAt   DateTime  @default(now())
+  uninstalledAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Location {
+  id                String  @id @default(cuid())
+  tenantId          String
+  shopifyLocationId String
+  name              String
+  isPrimary         Boolean @default(false)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inventoryLevels InventoryLevel[]
+
+  @@unique([tenantId, shopifyLocationId])
+  @@index([tenantId])
+}
+
+model InventoryLevel {
+  id         String   @id @default(cuid())
+  tenantId   String
+  locationId String
+  productId  String
+  onHand     Int      @default(0) // on_hand quantity, NOT available
+  updatedAt  DateTime @updatedAt
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, productId])
+  @@index([tenantId])
+}
+
+model IngestCursor {
+  id        String    @id @default(cuid())
+  tenantId  String
+  source    String // "shopify"
+  resource  String // "orders" | "products" | "inventory"
+  cursor    DateTime?
+  updatedAt DateTime  @updatedAt
+
+  @@unique([tenantId, source, resource])
+}
+
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  webhookId  String   @unique // X-Shopify-Webhook-Id
+  topic      String
+  shop       String
+  receivedAt DateTime @default(now())
 }
