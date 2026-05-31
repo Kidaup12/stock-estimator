@@ -1,64 +1,50 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-29T23:00:05.377Z",
-  "phase": "01",
-  "phase_name": "boot-determinism-cleanup",
-  "phase_dir": ".planning/phases/01-boot-determinism-cleanup",
-  "plan": null,
-  "task": null,
-  "total_tasks": 0,
-  "status": "phase_complete_awaiting_next_phase_decision",
-  "completed_tasks": [
-    { "id": "plan-01-01", "name": "Postgres migration + dev.db scrub + .env.example + README", "status": "done", "commit": "151d887" },
-    { "id": "plan-01-02", "name": "Forecast determinism + onOrder feedback + dashboard query rewrite (codex patches inline)", "status": "done", "commit": "ce99b83" },
-    { "id": "plan-01-03", "name": "Vitest harness + check-determinism + Phase 1 checkpoint", "status": "done", "commit": "ae47bbc" }
-  ],
-  "remaining_tasks": [
-    { "id": "decision", "name": "Roy + Anjay decide Phase 2 (auth+multi-tenant) vs Phase 3 (real Shopify, single-tenant shortcut) ordering", "status": "blocked_on_human" },
-    { "id": "phase-2-discuss", "name": "/gsd:discuss-phase 2 --auto OR /gsd:discuss-phase 3 --auto", "status": "not_started" }
-  ],
-  "blockers": [
-    {
-      "description": "Phase 2 vs Phase 3 ordering decision — Anjay's call",
-      "type": "human_action",
-      "workaround": "Default to Phase 2 per ROADMAP.md if Anjay unavailable; Phase 3 single-tenant is a defensible shortcut to a Level-2 demo for Mary"
-    }
-  ],
-  "human_actions_pending": [
-    {
-      "action": "Roy shows localhost:3082 to Anjay (Level 1 demo: real catalog + synthetic sales + working forecast UX)",
-      "context": "Tests product-market signal before more engineering. Anjay's reaction shapes Phase 2 vs Phase 3 priority",
-      "blocking": false
-    },
-    {
-      "action": "Push 18 commits + 1 docs commit on `main` to `Kidaup12/stock-estimator` upstream (not yet pushed)",
-      "context": "Local clone only; Anjay + the GitHub PR refs don't see Phase 1 yet",
-      "blocking": false
-    },
-    {
-      "action": "Kill the localhost:3082 dev server (background process b2jqbb3dj) if pausing for more than ~24h",
-      "context": "Server is still running. Harmless but eats RAM",
-      "blocking": false
-    }
+  "timestamp": "2026-05-31T00:00:00.000Z",
+  "phase": "03",
+  "phase_name": "real-shopify-ingest-odoo",
+  "phase_dir": ".planning/phases/03-real-shopify-ingest-odoo",
+  "status": "wave_1_complete_wave_2_in_progress_awaiting_shop_domain",
+  "milestone_summary": {
+    "phase_1": "COMPLETE — Postgres + determinism + onOrder feedback. Verified.",
+    "phase_2": "COMPLETE + verified live — Supabase auth, requireTenant() chokepoint, /shop/[slug] routing, Membership, tenant-tz determinism, ESLint isolation rule, 2-tenant test, tenant-cache. Roy is OWNER of beauty-square (1023 products) at /shop/beauty-square/dashboard. 6/6 plans, 49 tests, lint clean, build green.",
+    "phase_3": "IN PROGRESS — Wave 1 done (schema + encryption + migration). Wave 2 (Shopify connect) blocked on shop domain + token verification."
+  },
+  "phase_3_plans": [
+    { "id": "03-01", "name": "Schema (6 models) + AES-256-GCM encryption + additive migration", "status": "done", "commit": "see git log feat(03-01)" },
+    { "id": "03-02", "name": "OAuth connect flow", "status": "re-sequenced — using CUSTOM-APP TOKEN instead of public OAuth per Roy's choice; OAuth UI deferred to multi-tenant/deploy" },
+    { "id": "03-03", "name": "Bulk Operations backfill + Location/InventoryLevel + guarded synthetic→real cutover (lib/shopify/cutover.ts)", "status": "not_started — the next major task" },
+    { "id": "03-04", "name": "Webhooks (HMAC + idempotency)", "status": "not_started — needs API secret (have it) + live delivery deferred to deploy" },
+    { "id": "03-05", "name": "Nightly reconcile cron + uninstall handler", "status": "not_started" }
   ],
   "decisions": [
-    { "decision": "Use Roy's personal Supabase project (lkkljxvuhkaydhffpaix, eu-central-1 Frankfurt) for dev; client account when prod ships", "rationale": "Transfer is trivial (re-run migrations); Anjay's account wasn't ready; speed > clean ownership at the dev stage", "phase": "01" },
-    { "decision": "Session Pooler (port 5432, IPv4-proxied) for both DATABASE_URL and DIRECT_URL", "rationale": "Direct connection is IPv6-only on free tier; most Kenyan ISPs are IPv4. Session pooler works for both runtime AND prisma migrate, eliminating the need for two pooler URLs at the dev stage", "phase": "01" },
-    { "decision": "Dev server port 3082 instead of default 3000", "rationale": "Roy's :3000 was busy. Baked into package.json's `dev` script", "phase": "01" },
-    { "decision": "Skip §A SQLite baseline boot in RUNBOOK", "rationale": "Codex flagged §A as belt-and-suspenders; §D Postgres boot covers the same FND-01 ground without the rollback/replay dance", "phase": "01" },
-    { "decision": "Apply Codex's 6 review findings inline via Edit tool rather than re-spawning planner with --reviews", "rationale": "Faster, Roy stays in the loop, surgical patches preserve plan structure", "phase": "01" },
-    { "decision": "Plan 02 added forecastRunId @default(cuid()) at schema level (codex catch #4)", "rationale": "Migration-safe — if a future prod DB has existing predictions, the default backfills cleanly. The route still supplies a single batch ID per run; the default only fires for orphan writes", "phase": "01" }
+    { "decision": "Custom-app Admin API token instead of public OAuth app (Plan 03-02 re-sequenced)", "rationale": "Roy has direct Beauty Square store-admin access; custom token = real data flowing today with no Partner app, no OAuth redirect, no HTTPS tunnel. Single-store, fine for the only tenant now. Public OAuth flow deferred to multi-tenant/client-2/deploy.", "phase": "03" },
+    { "decision": "Synthetic→real cutover REPLACES the synthetic seed (guarded)", "rationale": "Roy confirmed. On first real backfill, lib/shopify/cutover.ts does a guarded dry-run-count + explicit-confirm before deleting the tenant's synthetic Product/SalesHistory/Prediction/Order (preserving Supplier/Promo/MonthlyContext), then ingests real.", "phase": "03" },
+    { "decision": "Odoo (ODOO-01..05) DEFERRED out of Phase 3", "rationale": "No live Odoo test target; ODOO ingest depends on the Phase-4 merge layer. Phase 3 = Shopify-complete. Roy confirmed. Move ODOO-* to a later milestone/tail.", "phase": "03" },
+    { "decision": "Prisma migrations via `migrate diff --script` + `migrate deploy`, NOT `migrate dev`", "rationale": "migrate dev is non-interactive-hostile (blocks on data-loss warnings even with --create-only). diff+deploy is the Supabase-safe non-interactive path. Stop the dev server first (free-tier pooler connection cap).", "phase": "03" }
   ],
-  "uncommitted_files": [],
-  "background_processes": [
-    {
-      "id": "b2jqbb3dj",
-      "command": "npm run dev",
-      "url": "http://localhost:3082",
-      "purpose": "Dev server for Playwright verification during Wave 2/3",
-      "kill_when_resuming": "optional — Next.js Turbopack will hot-reload Phase 2/3 edits if you leave it up"
-    }
+  "credentials_status": {
+    "stashed_in_env": "SHOPIFY_ADMIN_TOKEN, SHOPIFY_API_KEY, SHOPIFY_API_SECRET, SHOPIFY_SCOPES (.env, gitignored)",
+    "WARNING_token_format": "SHOPIFY_ADMIN_TOKEN starts with `atkn_` — NON-STANDARD for a Shopify Admin API token (expected `shpat_`). VERIFY it works (or re-grab the real shpat_ token from the custom app's API credentials page) before the backfill.",
+    "MISSING": "SHOPIFY_SHOP_DOMAIN — Beauty Square's <store>.myshopify.com. Required for ALL Shopify API calls. Ask Roy or find it in admin URL admin.shopify.com/store/<store>.",
+    "api_secret_present": "SHOPIFY_API_SECRET (shpss_...) is set — needed for webhook HMAC in Plan 03-04 (webhooks deferred to deploy)."
+  },
+  "next_actions": [
+    "1. Get SHOPIFY_SHOP_DOMAIN from Roy (the <store>.myshopify.com).",
+    "2. Verify SHOPIFY_ADMIN_TOKEN: curl https://<domain>/admin/api/2026-04/shop.json -H 'X-Shopify-Access-Token: <token>' — expect 200 + shop JSON. If 401, the atkn_ token is wrong → re-grab the shpat_ Admin API access token.",
+    "3. Execute Plan 03-03 (re-sequenced for custom token): build lib/shopify/shopify.ts GraphQL client from the token+domain (NOT the OAuth session); wire a small script to encrypt the token into ShopifyConnection for the beauty-square tenant + set Tenant.shopifyDomain; run Bulk Operations backfill (orders 365d + products/variants + on_hand inventory via quantities(names:[\"on_hand\"])); then the GUARDED cutover (lib/shopify/cutover.ts) — dry-run count + confirm before deleting synthetic data; re-run forecasts on real data.",
+    "4. Then Plans 03-04 (webhooks, HMAC-tested locally, live deferred) + 03-05 (reconcile cron + uninstall).",
+    "5. Pin ApiVersion 2026-04 (April26). @shopify/shopify-api@13 + session-storage-prisma@9 (NOT yet installed)."
   ],
-  "next_action": "/gsd:resume-work to load this handoff, then either /gsd:discuss-phase 2 --auto (canonical roadmap order) OR /gsd:discuss-phase 3 --auto (single-tenant Shopify-first shortcut). Recommend asking Anjay first.",
-  "context_notes": "Phase 1 was the boring foundation — Postgres + determinism + onOrder feedback + dedupe. Live-verified end-to-end via Playwright: dashboard renders Beauty Square's 1023-product catalog at localhost:3082 with KES 11.6M synthetic-sales revenue, 109 critical/high reorders, 130 stockouts. Two consecutive forecast runs produce byte-identical math (FND-02 mulberry32 works). Approving 'Glow From Within Bundle' bumped Product.onOrder 0→65 transactionally; next forecast recommended 0 instead of 65 (FND-04 + codex #1 closed). All work is in git on `main` of the local clone at `wezesha/stock-estimator/`, not yet pushed upstream. The next decision is strategic (demo Anjay first OR ship Phase 2 auth foundation) rather than technical — that's why this is paused-pending-decision rather than paused-mid-task. Roy's session preferences: grade-9 explanations, concrete options + recommendations in AskUserQuestion, CLI-first execution, ask before destructive operations. Codex CLI is installed and proven valuable as a second-opinion reviewer (caught 6 real issues plan-checker missed). Supabase agent-skills available via `npx skills add supabase/agent-skills` (deferred — not installed)."
+  "key_files": {
+    "research": ".planning/phases/03-real-shopify-ingest-odoo/03-RESEARCH.md (pinned versions, Bulk Ops + HMAC + on_hand code sketches, cutover order)",
+    "context": ".planning/phases/03-real-shopify-ingest-odoo/03-CONTEXT.md (D-01..D-13 locked decisions)",
+    "plans": ".planning/phases/03-real-shopify-ingest-odoo/03-0[1-5]-PLAN.md",
+    "encryption": "lib/crypto/encryption.ts (encrypt/decrypt — use to store the token in ShopifyConnection)",
+    "webhook_resolver": "lib/auth/webhook-context.ts (resolveTenantByDomain — switch to findUnique now that Tenant.shopifyDomain @unique exists)",
+    "mock_to_delete": "lib/shopify/client.ts (mock — delete + remove its eslint.config.mjs allow-list entry when real client lands)"
+  },
+  "dev_server": "npm run dev @ localhost:3082 (background; stop it before any prisma migrate / DB script — Supabase pooler limit). App live: Roy logged in, /shop/beauty-square/dashboard shows 1023 products.",
+  "git_state": "All work committed on main of the local clone (NOT pushed to Kidaup12/stock-estimator upstream — pending). Phases 1+2 complete, Phase 3 Wave 1 complete.",
+  "resume_command": "cd C:/Users/ROY/Documents/wezesha/stock-estimator && /gsd:resume-work  (then continue Phase 3 Wave 2 / Plan 03-03)"
 }
