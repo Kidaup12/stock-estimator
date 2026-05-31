@@ -60,7 +60,13 @@
   3. Editing a product price in Shopify Admin propagates to the dashboard within seconds via webhook; deleting a product in Shopify removes it from the local catalog; `X-Shopify-Webhook-Id` replay is a no-op.
   4. Forcing a webhook miss (kill the handler, edit in Shopify, restart) and running the nightly reconcile cron catches the delta via `IngestCursor`; uninstalling the Shopify app from the merchant side clears tokens but preserves tenant data.
   5. The same OAuth → ingest → polling pattern works for Odoo: owner connects from settings, products + inventory + sales orders ingest and stay synced via the same `IngestCursor` resumability model.
-**Plans**: TBD
+**Scope note**: Phase 3 ships **Shopify-complete (SHOP-01..09)**. **ODOO-01..05 are DEFERRED** to a Phase 3 tail / later milestone per 03-CONTEXT.md D-12 (no live Odoo test target + ODOO-02/03 depend on the Phase 4 merge layer). Success criterion #5 (Odoo) is therefore deferred.
+**Plans**: 5 plans (Shopify only)
+- [ ] 03-01-PLAN.md — Schema (Session + ShopifyConnection + Location + InventoryLevel + IngestCursor + WebhookEvent + Tenant.shopifyDomain @unique) + AES-256-GCM token encryption + additive migration
+- [ ] 03-02-PLAN.md — Shopify OAuth connect flow (offline token, encrypted, tenant-bound) + shopify singleton + Connect button + webhook resolver findUnique [autonomous: false — Partner app creds checkpoint]
+- [ ] 03-03-PLAN.md — Bulk Operations backfill (365d orders + products + on_hand) + Location/InventoryLevel + GUARDED synthetic→real cutover + delete mock client [autonomous: false — destructive cutover checkpoint]
+- [ ] 03-04-PLAN.md — Webhooks (HMAC-first + timingSafeEqual + WebhookEvent idempotency) + topic dispatch + subscription registration
+- [ ] 03-05-PLAN.md — Nightly reconcile cron (IngestCursor delta sweep) + vercel.json + uninstall data-preservation test
 **UI hint**: yes
 
 ### Phase 4: QuickBooks + Source-of-Truth Merge + PO Delivery
@@ -95,7 +101,7 @@
 |-------|----------------|--------|-----------|
 | 1. Boot, Determinism & Cleanup | 2/3 | In Progress|  |
 | 2. Multi-Tenant Auth & Tenant Routing | 0/6 | Not started | - |
-| 3. Real Shopify Ingest + Odoo | 0/TBD | Not started | - |
+| 3. Real Shopify Ingest + Odoo | 0/5 | Not started (Shopify only; Odoo deferred) | - |
 | 4. QuickBooks + Source-of-Truth Merge + PO Delivery | 0/TBD | Not started | - |
 | 5. Python Forecast Sidecar + Operations + Handover | 0/TBD | Not started | - |
 
