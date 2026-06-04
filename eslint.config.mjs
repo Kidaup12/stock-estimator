@@ -25,10 +25,6 @@ const eslintConfig = defineConfig([
       "lib/auth/webhook-context.ts",
       "app/api/onboarding/route.ts",
       "app/page.tsx",
-      // Mock Shopify client — replaced wholesale by real per-tenant OAuth in
-      // Phase 3 (SHOP-01). Its prisma.tenant.findFirst() stubs are throwaway;
-      // rewriting them now would be discarded. TODO(Phase 3): delete with the mock.
-      "lib/shopify/client.ts",
     ],
     plugins: { "tenant-safety": tenantSafety },
     rules: { "tenant-safety/require-tenant-scope": "error" },

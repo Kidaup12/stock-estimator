@@ -52,3 +52,6 @@ app/showroom/
 
 .vercel
 fc.json
+
+# GSD execution caches (transient — never push upstream)
+.planning/_*

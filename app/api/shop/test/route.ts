@@ -1,28 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ShopifyClient } from "@/lib/shopify/client";
-import { z } from "zod";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 
-const schema = z.object({
-  shopifyDomain: z.string().min(1),
-  shopifyAccessToken: z.string().optional().nullable(),
-});
+/**
+ * GET /api/shop/test — real, tenant-scoped Shopify connection status.
+ *
+ * Replaces the old mock Shopify test-connection stub. Reports whether the
+ * current tenant has a live ShopifyConnection (installed, not uninstalled). Never
+ * decrypts or exposes credentials.
+ */
+export async function GET() {
+  const ctx = await requireTenantOrResponse();
+  if (ctx instanceof NextResponse) return ctx;
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  }
+  const connection = await prisma.shopifyConnection.findUnique({
+    where: { tenantId: ctx.tenant.id },
+    select: { shopDomain: true, scope: true, installedAt: true, uninstalledAt: true },
+  });
 
-  try {
-    const client = new ShopifyClient({
-      domain: parsed.data.shopifyDomain,
-      accessToken: parsed.data.shopifyAccessToken || null,
-    });
-    const info = await client.testConnection();
-    return NextResponse.json(info);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
-  }
+  const connected = Boolean(connection && !connection.uninstalledAt);
+  return NextResponse.json({
+    ok: true,
+    connected,
+    shopName: connected ? connection!.shopDomain : "not connected",
+    scope: connection?.scope ?? null,
+  });
 }
