@@ -2,45 +2,43 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-05-30T15:25:49.431Z"
+status: executing
+stopped_at: Phase 3 Plan 03-03 complete (real Shopify ingest live)
+last_updated: "2026-06-04T00:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
-  percent: 100
+  total_plans: 11
+  completed_plans: 11
+  percent: 60
 ---
 
 # STATE: Wezesha Restock OS
 
-**Last updated:** 2026-05-30 (Phase 1 complete — Plan 01-03 shipped)
+**Last updated:** 2026-06-04 (Phase 3 — Plan 03-03 shipped: real Beauty Square data live)
 
 ## Project Reference
 
 **Core Value:** Tell a shop owner exactly what to reorder this week, generate the PO, and email it to the right supplier — with enough confidence that they trust the number.
 
-**Current Focus:** Phase 02 — multi-tenant-auth-tenant-routing
+**Current Focus:** Phase 03 — real-shopify-ingest-odoo (Plan 03-03 done; 03-04 webhooks + 03-05 reconcile remain)
 
 **Client + Commercial:** Subcontracted by Anjay (SimplyDone Africa). First paying tenant = Beauty Square (Nairobi beauty retailer). Roy = builder; Anjay = client relationships + design + credential fetching.
 
 ## Current Position
 
-Phase: 02 (multi-tenant-auth-tenant-routing) — EXECUTING
-Plan: 1 of 6
-**Phase:** 3 of 5 (real shopify ingest + odoo)
-**Plan:** Not started
-**Status:** Ready to plan
-**Progress:** [██████████] 100%
+**Phase:** 3 of 5 (real shopify ingest + odoo) — EXECUTING
+**Plan:** 03-03 COMPLETE (03-01, 03-03 done; 03-02 re-sequenced to custom-app token; 03-04 + 03-05 remain)
+**Status:** Real Beauty Square data live — 1100 products, 2936 sales, 4 locations, 3920 on_hand, 719 predictions, 98 reorder orders
+**Progress:** [██████░░░░] 60%
 
 ## Phase Pipeline
 
 | # | Phase | Status | Notes |
 |---|-------|--------|-------|
-| 1 | Boot, Determinism & Cleanup | ✅ COMPLETE (3/3 plans) | Postgres + determinism + cleanup shipped; vitest 22/22 green; ready for /gsd:transition |
-| 2 | Multi-Tenant Auth & Tenant Routing | Not started | Precondition for any external integration |
-| 3 | Real Shopify Ingest + Odoo | Not started | Anjay fetching Shopify credentials |
+| 1 | Boot, Determinism & Cleanup | ✅ COMPLETE (3/3 plans) | Postgres + determinism + cleanup; vitest green |
+| 2 | Multi-Tenant Auth & Tenant Routing | ✅ COMPLETE (6/6 plans) | Supabase auth, requireTenant, /shop/[slug], tenant isolation verified live |
+| 3 | Real Shopify Ingest + Odoo | 🔵 IN PROGRESS | 03-01 schema+encryption ✅, 03-03 ingest+cutover ✅ (REAL data live). 03-04 webhooks + 03-05 reconcile remain. Odoo deferred to later milestone (D). |
 | 4 | QuickBooks + Source-of-Truth Merge + PO Delivery | Not started | Anjay fetching QB sandbox + KES home currency |
 | 5 | Python Forecast Sidecar + Operations + Handover | Not started | Regime calibration needs ≥30d real Beauty Square data |
 
@@ -101,15 +99,16 @@ None active. Phase 1 is fully unblocked.
 
 ## Session Continuity
 
-**Last session focus:** Phase 1 complete — vitest harness shipped, check-determinism green, all 7 FND requirements verified live.
+**Last session focus:** Phase 3 Plan 03-03 — real Shopify ingest made live. client-credentials grant verified (shop.json 200), Bulk Ops backfill (1100 products / 4 locations / 2128 orders), guarded synthetic→real cutover ran, sales finished via resumable helper (2936 rows), forecasts re-run on real data (719 predictions, 98 reorder orders). Mock client deleted. jsonl 8/8, tsc clean, lint 0 errors. Committed `1c09fec`.
 
-**Stopped at:** Phase 3 context gathered
+**Stopped at:** Plan 03-03 complete + committed (local main, not pushed upstream).
 
 **Next session should:**
 
-1. Open this STATE.md
-2. Review `.planning/phases/01-boot-determinism-cleanup/01-03-SUMMARY.md` + `01-03-CHECKPOINT.md`
-3. Run `/gsd:transition` to advance to Phase 2 (Multi-Tenant Auth & Tenant Routing)
+1. Open this STATE.md + `.planning/phases/03-real-shopify-ingest-odoo/03-03-SUMMARY.md`
+2. Plan/execute **Plan 03-04** (webhooks — HMAC + idempotency; SHOPIFY_API_SECRET present; live delivery deferred to deploy) and **Plan 03-05** (nightly reconcile cron + uninstall handler)
+3. Calibration backlog (Phase 5): productType normalization (Beauty Square product_type is empty), confirm desired primary location (currently Lavington vs online New Stanley CBD)
+4. Push local main → Kidaup12/stock-estimator upstream when ready (pending; ask Roy)
 
 **Files of record:**
 
