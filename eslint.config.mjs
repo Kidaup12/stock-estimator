@@ -24,6 +24,7 @@ const eslintConfig = defineConfig([
       "lib/auth/context.ts",
       "lib/auth/webhook-context.ts",
       "app/api/onboarding/route.ts",
+      "app/api/cron/reconcile/route.ts", // cross-tenant system route: deliberately iterates all live connections
       "app/page.tsx",
     ],
     plugins: { "tenant-safety": tenantSafety },
