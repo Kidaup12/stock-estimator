@@ -5,11 +5,18 @@
  * Prediction -> create pending Order for critical/high). Also snapshots inventory.
  */
 import { prisma } from "@/lib/prisma";
-import { simulateLayeredForecast, type ActivePromo } from "@/lib/forecast/simulate-layers";
+import {
+  simulateLayeredForecast,
+  type ActivePromo,
+  type ForecastInput,
+  type ForecastResult,
+} from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
 import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 import { snapshotInventory } from "@/lib/inventory/snapshot";
+import { forecastDemandViaSidecar } from "@/lib/forecast/sidecar-client";
+import { assembleForecastResult, type DemandForecast } from "@/lib/forecast/assemble";
 
 export async function runForecastsForTenant(
   tenantId: string,
@@ -64,27 +71,43 @@ export async function runForecastsForTenant(
     scopeValue: p.scopeValue,
   }));
 
-  let created = 0;
-  for (const p of products) {
-    const history = historyByProduct.get(p.id) ?? [];
-    const supplier = p.supplier;
-    const leadAvg = supplier?.leadTimeAvgDays ?? 30;
-    const leadStd = supplier?.leadTimeStdDays ?? 7;
-    const abc = abcMap[p.id] ?? "C";
+  // Build the forecast input for every product (same order as `products`).
+  const inputs: ForecastInput[] = products.map((p) => ({
+    productId: p.id,
+    productType: p.productType,
+    vendor: p.vendor,
+    sku: p.sku,
+    currentStock: p.currentStock,
+    abcCategory: abcMap[p.id] ?? "C",
+    history: historyByProduct.get(p.id) ?? [],
+    leadTimeAvg: p.supplier?.leadTimeAvgDays ?? 30,
+    leadTimeStd: p.supplier?.leadTimeStdDays ?? 7,
+    activePromos: promosShaped,
+    runDateKey,
+  }));
 
-    const result = simulateLayeredForecast({
-      productId: p.id,
-      productType: p.productType,
-      vendor: p.vendor,
-      sku: p.sku,
-      currentStock: p.currentStock,
-      abcCategory: abc,
-      history,
-      leadTimeAvg: leadAvg,
-      leadTimeStd: leadStd,
-      activePromos: promosShaped,
-      runDateKey,
-    });
+  // Demand source: the Python sidecar when enabled, else the TS forecast. On ANY
+  // sidecar failure, fall back to TS for the whole run — never break the batch.
+  let demands: DemandForecast[] | null = null;
+  if (process.env.USE_SIDECAR === "1" && process.env.FORECAST_SIDECAR_URL) {
+    try {
+      demands = await forecastDemandViaSidecar(inputs);
+    } catch (e) {
+      console.error("Sidecar forecast failed — falling back to TS:", (e as Error).message);
+      demands = null;
+    }
+  }
+
+  let created = 0;
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i];
+    const input = inputs[i];
+    const abc = input.abcCategory ?? "C";
+
+    const result: ForecastResult =
+      demands && demands[i]
+        ? assembleForecastResult(input, demands[i])
+        : simulateLayeredForecast(input);
 
     const adjustedRecommendedQty = computeRecommendedQty({
       finalForecast30d: result.finalForecast30d,
@@ -113,7 +136,7 @@ export async function runForecastsForTenant(
         urgency: result.urgency,
         signals: JSON.stringify(result.signals),
         forecastRunId,
-        regime: null,
+        regime: demands && demands[i] ? (demands[i].regime ?? null) : null,
       },
     });
 
