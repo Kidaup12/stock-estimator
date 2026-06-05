@@ -6,6 +6,7 @@
  * Each helper pages through `edges`/`pageInfo` until `hasNextPage` is false and
  * returns the flat list of nodes.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { shopifyGraphql } from "./shopify";
 
 const PAGE = 100;
@@ -93,20 +94,57 @@ export async function fetchOrdersSince(shopDomain: string, sinceIso: string) {
   );
 }
 
-/** All locations with on_hand inventory levels (full refresh — no cheap delta). */
+type InventoryLevelNode = {
+  quantities?: Array<{ name: string; quantity: number }>;
+  item?: { id?: string; variant?: { id?: string; product?: { id?: string } } };
+};
+
+/** Page through ALL inventory levels for a single location (inner connection). */
+async function fetchInventoryLevelsForLocation(
+  shopDomain: string,
+  locationId: string
+): Promise<InventoryLevelNode[]> {
+  const out: InventoryLevelNode[] = [];
+  let after: string | null = null;
+  for (let i = 0; i < 1000; i++) {
+    const data: any = await shopifyGraphql<any>(
+      shopDomain,
+      `query($id: ID!, $after: String) {
+        location(id: $id) {
+          inventoryLevels(first: 250, after: $after) {
+            edges { node {
+              quantities(names: ["on_hand"]) { name quantity }
+              item { id variant { id product { id } } }
+            } }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }`,
+      { id: locationId, after }
+    );
+    const conn = data.location?.inventoryLevels;
+    if (!conn) break;
+    out.push(...conn.edges.map((e: any) => e.node));
+    if (!conn.pageInfo?.hasNextPage || !conn.pageInfo?.endCursor) break;
+    after = conn.pageInfo.endCursor;
+  }
+  return out;
+}
+
+/**
+ * All locations with on_hand inventory levels (full refresh — no cheap delta).
+ * The inner inventoryLevels connection is FULLY paginated per location (a single
+ * `first: 250` caps silently — Beauty Square has ~980 levels/location, so an
+ * un-paginated query drops ~75% of inventory). Locations are few (≤50), so the
+ * outer list is one page; each location's levels are paged to exhaustion.
+ */
 export async function fetchLocationsWithInventory(shopDomain: string) {
-  return pageAll(
+  const locations = await pageAll<{ id: string; name: string; isActive: boolean }>(
     shopDomain,
     (after) => ({
       query: `query($after: String) {
         locations(first: 50, after: $after) {
-          edges { node {
-            id name isActive
-            inventoryLevels(first: 250) { edges { node {
-              quantities(names: ["on_hand"]) { name quantity }
-              item { id variant { id product { id } } }
-            } } }
-          } }
+          edges { node { id name isActive } }
           pageInfo { hasNextPage endCursor }
         }
       }`,
@@ -117,9 +155,15 @@ export async function fetchLocationsWithInventory(shopDomain: string) {
         id: e.node.id,
         name: e.node.name,
         isActive: e.node.isActive,
-        inventoryLevels: e.node.inventoryLevels.edges.map((l: any) => l.node),
       })),
       pageInfo: d.locations.pageInfo,
     })
   );
+
+  const result = [];
+  for (const loc of locations) {
+    const inventoryLevels = await fetchInventoryLevelsForLocation(shopDomain, loc.id);
+    result.push({ ...loc, inventoryLevels });
+  }
+  return result;
 }
