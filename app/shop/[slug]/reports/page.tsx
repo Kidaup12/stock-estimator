@@ -11,6 +11,15 @@ type SupplierSlice = { name: string; revenue: number; stockCost: number; stockRe
 type Mover = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; revenue30: number; qty30: number; stock: number };
 type Slow = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; stock: number; stockValue: number; stockRetail: number };
 
+type PositionRow = {
+  productId: string; title: string; sku: string; runRate: number;
+  openingOnHand: number; openingEstimated: boolean; currentStock: number;
+  onOrder: number; expectedArrivalAt: string | null;
+  leadTimeAvgDays: number | null; leadTimeStdDays: number | null; daysOfCover: number | null;
+};
+type PositionGroup = { rows: PositionRow[]; subtotal: { count: number; opening: number; current: number; enRoute: number } };
+type PositionView = { windowDays: number; groups: { A: PositionGroup; B: PositionGroup; C: PositionGroup }; trackingSince: string | null };
+
 type ReportsData = {
   monthly: Monthly[];
   byCategory: Slice[];
@@ -38,10 +47,19 @@ export default function ReportsPage() {
   const { slug } = useParams<{ slug: string }>();
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [position, setPosition] = useState<PositionView | null>(null);
+  const [posWindow, setPosWindow] = useState(30);
 
   useEffect(() => {
     apiFetch(slug, "/api/reports").then(r => r.json()).then(d => { setData(d); setLoading(false); });
   }, []);
+
+  useEffect(() => {
+    apiFetch(slug, `/api/inventory-position?window=${posWindow}`)
+      .then((r) => r.json())
+      .then((d) => setPosition(d))
+      .catch(() => setPosition(null));
+  }, [posWindow]);
 
   if (loading || !data) {
     return <main className="min-h-screen bg-canvas p-8 text-center text-mute text-sm">Loading reports…</main>;
@@ -237,6 +255,90 @@ export default function ReportsPage() {
           </section>
         </div>
       </div>
+
+      {position && (
+        <section className="max-w-7xl mx-auto px-5 sm:px-8 py-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-ink">Inventory Position</h2>
+            <div className="flex gap-1">
+              {[30, 60, 90].map((w) => (
+                <button
+                  key={w}
+                  onClick={() => setPosWindow(w)}
+                  className={`text-2xs px-2 py-1 rounded border ${
+                    posWindow === w ? "border-ink text-ink" : "border-line text-mute"
+                  }`}
+                >
+                  {w}d
+                </button>
+              ))}
+            </div>
+          </div>
+          {position.trackingSince ? (
+            <p className="text-2xs text-mute mb-3">
+              Opening measured since {new Date(position.trackingSince).toLocaleDateString("en-KE")}; older windows estimated (~).
+            </p>
+          ) : (
+            <p className="text-2xs text-mute mb-3">Opening-stock tracking starts today; openings shown are estimates (~).</p>
+          )}
+          {(["A", "B", "C"] as const).map((g) => {
+            const grp = position.groups[g];
+            if (!grp || grp.rows.length === 0) return null;
+            return (
+              <div key={g} className="mb-6">
+                <div className="flex items-center gap-3 text-xs text-mute mb-1">
+                  <span className="font-semibold text-ink">Class {g}</span>
+                  <span>{grp.subtotal.count} SKUs</span>
+                  <span>opening {Math.round(grp.subtotal.opening)}</span>
+                  <span>on-hand {Math.round(grp.subtotal.current)}</span>
+                  <span>en route {Math.round(grp.subtotal.enRoute)}</span>
+                </div>
+                <div className="overflow-x-auto rounded border border-line">
+                  <table className="w-full text-2xs">
+                    <thead className="text-mute">
+                      <tr className="border-b border-line">
+                        <th className="text-left p-2">Product</th>
+                        <th className="text-right p-2">Run/day</th>
+                        <th className="text-right p-2">Opening</th>
+                        <th className="text-right p-2">On-hand</th>
+                        <th className="text-right p-2">En route</th>
+                        <th className="text-right p-2">Lead (d)</th>
+                        <th className="text-right p-2">Days cover</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grp.rows.map((r) => {
+                        const atRisk =
+                          r.daysOfCover !== null && r.leadTimeAvgDays !== null && r.daysOfCover < r.leadTimeAvgDays;
+                        return (
+                          <tr key={r.productId} className="border-b border-line/50">
+                            <td className="p-2 text-ink">{r.title}</td>
+                            <td className="p-2 text-right">{r.runRate.toFixed(2)}</td>
+                            <td className="p-2 text-right">
+                              {Math.round(r.openingOnHand)}{r.openingEstimated ? "~" : ""}
+                            </td>
+                            <td className="p-2 text-right">{Math.round(r.currentStock)}</td>
+                            <td className="p-2 text-right">
+                              {r.onOrder}
+                              {r.expectedArrivalAt ? ` (${new Date(r.expectedArrivalAt).toLocaleDateString("en-KE")})` : ""}
+                            </td>
+                            <td className="p-2 text-right">
+                              {r.leadTimeAvgDays == null ? "—" : `${r.leadTimeAvgDays}±${r.leadTimeStdDays ?? 0}`}
+                            </td>
+                            <td className={`p-2 text-right ${atRisk ? "text-red-500 font-semibold" : ""}`}>
+                              {r.daysOfCover == null ? "—" : Math.round(r.daysOfCover)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
     </main>
   );
 }
