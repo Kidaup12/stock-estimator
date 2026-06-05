@@ -29,6 +29,7 @@ model Tenant {
   shopifyConnection  ShopifyConnection?
   locations          Location[]
   inventorySnapshots InventorySnapshot[]
+  purchaseOrders     PurchaseOrder[]
 }
 
 model Membership {
@@ -71,6 +72,7 @@ model Product {
   predictions        Prediction[]
   inventoryLevels    InventoryLevel[]
   inventorySnapshots InventorySnapshot[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([tenantId, shopifyProductId])
   @@index([tenantId])
@@ -106,8 +108,9 @@ model Supplier {
   notes           String?
   createdAt       DateTime @default(now())
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products Product[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([tenantId])
 }
@@ -185,9 +188,11 @@ model Order {
   approvedAt          DateTime?
   skipReason          String?
   createdAt           DateTime  @default(now())
+  purchaseOrderId     String?
 
-  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  prediction Prediction @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prediction    Prediction     @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status])
 }
@@ -282,4 +287,40 @@ model InventorySnapshot {
 
   @@unique([productId, date])
   @@index([tenantId, date])
+}
+
+model PurchaseOrder {
+  id          String    @id @default(cuid())
+  tenantId    String
+  supplierId  String
+  poNumber    String
+  status      String    @default("draft") // draft | sent
+  currency    String    @default("KES")
+  subtotalKes Float     @default(0)
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  lines    PurchaseOrderLine[]
+  orders   Order[]
+
+  @@unique([tenantId, poNumber])
+  @@index([tenantId])
+}
+
+model PurchaseOrderLine {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  productId       String
+  sku             String
+  title           String
+  quantity        Int
+  unitCostKes     Float
+  lineTotalKes    Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
 }
