@@ -39,7 +39,7 @@ progress:
 | 1 | Boot, Determinism & Cleanup | ✅ COMPLETE (3/3 plans) | Postgres + determinism + cleanup; vitest green |
 | 2 | Multi-Tenant Auth & Tenant Routing | ✅ COMPLETE (6/6 plans) | Supabase auth, requireTenant, /shop/[slug], tenant isolation verified live |
 | 3 | Real Shopify Ingest + Odoo | 🔵 IN PROGRESS | 03-01 schema+encryption ✅, 03-03 ingest+cutover ✅ (REAL data live). Nightly reconcile + inventory-position view ✅ (superpowers track, 2026-06-05 — covers 03-05 reconcile). 03-04 webhooks remain. Odoo deferred (D). |
-| 4 | QuickBooks + Source-of-Truth Merge + PO Delivery | Not started | Anjay fetching QB sandbox + KES home currency |
+| 4 | QuickBooks + Source-of-Truth Merge + PO Delivery | 🔵 PARTIAL | PO generation (PDF+XLSX, supplier-grouped, KES-only) ✅ built + render-verified (superpowers track, 2026-06-05). Blocked/deferred: QB push + Resend send (empty creds), per-supplier FX, source-of-truth merge. Real POs need suppliers entered (0 today). |
 | 5 | Python Forecast Sidecar + Operations + Handover | Not started | Regime calibration needs ≥30d real Beauty Square data |
 
 ## Performance Metrics
@@ -101,7 +101,9 @@ None active. Phase 1 is fully unblocked.
 
 **Last session focus:** Phase 3 Plan 03-03 — real Shopify ingest made live. client-credentials grant verified (shop.json 200), Bulk Ops backfill (1100 products / 4 locations / 2128 orders), guarded synthetic→real cutover ran, sales finished via resumable helper (2936 rows), forecasts re-run on real data (719 predictions, 98 reorder orders). Mock client deleted. jsonl 8/8, tsc clean, lint 0 errors. Committed `1c09fec`.
 
-**Stopped at:** Nightly reconcile + inventory-position view shipped (superpowers track, 2026-06-05). All live on Beauty Square; 81 tests green, tsc clean, lint 0 errors. Committed local main (not pushed). Plan/spec/summary in docs/superpowers/.
+**Stopped at:** PO generation (PDF+XLSX, supplier-grouped, KES-only) shipped + render-verified (superpowers track, 2026-06-05). Phase-4 start. 86 tests green, tsc clean, lint 0 errors. Local main (not pushed). Docs in docs/superpowers/.
+
+**Blocked/deferred (need external):** QB push + Resend send (empty creds from Anjay), per-supplier FX, source-of-truth merge. Real PO demo needs Beauty Square suppliers entered (0 today). Reconcile follow-up: ~290 draft/archived products pending guarded cleanup (status:active filter already applied going forward).
 
 **Next session should:**
 
