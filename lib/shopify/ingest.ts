@@ -16,7 +16,7 @@ export type ShopifyVariantNode = {
   id?: string;
   sku?: string;
   price?: string;
-  inventoryItem?: { id?: string };
+  inventoryItem?: { id?: string; unitCost?: { amount?: string } };
 };
 
 export type ShopifyProductNode = {
@@ -71,6 +71,13 @@ export async function upsertProductFromShopify(
   const firstVariant = node.variants?.[0];
   const priceKes = firstVariant?.price ? Number.parseFloat(firstVariant.price) : 0;
 
+  // Real cost-per-item from Shopify (InventoryItem.unitCost). The Beauty Square
+  // shop currency is KES, so unitCost.amount maps straight to costKes. Only write
+  // it when present — never clobber an existing cost with 0 when Shopify omits it.
+  const costRaw = firstVariant?.inventoryItem?.unitCost?.amount;
+  const costParsed = costRaw ? Number.parseFloat(costRaw) : undefined;
+  const costKes = costParsed !== undefined && Number.isFinite(costParsed) ? costParsed : undefined;
+
   const row = await prisma.product.upsert({
     where: { tenantId_shopifyProductId: { tenantId, shopifyProductId: node.id } },
     create: {
@@ -82,6 +89,7 @@ export async function upsertProductFromShopify(
       vendor: node.vendor ?? null,
       productType: node.productType ?? null,
       priceKes: Number.isFinite(priceKes) ? priceKes : 0,
+      ...(costKes !== undefined ? { costKes } : {}),
       imageUrl: node.featuredImage?.url ?? null,
       currentStock,
     },
@@ -92,6 +100,7 @@ export async function upsertProductFromShopify(
       vendor: node.vendor ?? null,
       productType: node.productType ?? null,
       priceKes: Number.isFinite(priceKes) ? priceKes : 0,
+      ...(costKes !== undefined ? { costKes } : {}),
       imageUrl: node.featuredImage?.url ?? null,
       currentStock,
       lastSynced: new Date(),

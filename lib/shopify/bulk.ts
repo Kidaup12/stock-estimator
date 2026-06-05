@@ -128,7 +128,7 @@ export function productsBulkQuery(): string {
             id
             sku
             price
-            inventoryItem { id }
+            inventoryItem { id unitCost { amount } }
           } }
         }
       } }

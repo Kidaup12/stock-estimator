@@ -42,7 +42,7 @@ export async function fetchProductsSince(shopDomain: string, sinceIso: string) {
           edges { node {
             id title vendor productType
             featuredImage { url }
-            variants(first: 1) { edges { node { id sku price inventoryItem { id } } } }
+            variants(first: 1) { edges { node { id sku price inventoryItem { id unitCost { amount } } } } }
           } }
           pageInfo { hasNextPage endCursor }
         }
