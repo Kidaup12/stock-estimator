@@ -18,16 +18,17 @@ model Tenant {
   currency           String   @default("KES")
   createdAt          DateTime @default(now())
 
-  products          Product[]
-  salesHistory      SalesHistory[]
-  predictions       Prediction[]
-  orders            Order[]
-  suppliers         Supplier[]
-  promos            Promo[]
-  monthlyContext    MonthlyContext[]
-  memberships       Membership[]
-  shopifyConnection ShopifyConnection?
-  locations         Location[]
+  products           Product[]
+  salesHistory       SalesHistory[]
+  predictions        Prediction[]
+  orders             Order[]
+  suppliers          Supplier[]
+  promos             Promo[]
+  monthlyContext     MonthlyContext[]
+  memberships        Membership[]
+  shopifyConnection  ShopifyConnection?
+  locations          Location[]
+  inventorySnapshots InventorySnapshot[]
 }
 
 model Membership {
@@ -64,11 +65,12 @@ model Product {
   expectedArrivalAt DateTime?
   receivedAt        DateTime?
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  salesHistory    SalesHistory[]
-  predictions     Prediction[]
-  inventoryLevels InventoryLevel[]
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier           Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  salesHistory       SalesHistory[]
+  predictions        Prediction[]
+  inventoryLevels    InventoryLevel[]
+  inventorySnapshots InventorySnapshot[]
 
   @@unique([tenantId, shopifyProductId])
   @@index([tenantId])
@@ -266,4 +268,18 @@ model WebhookEvent {
   topic      String
   shop       String
   receivedAt DateTime @default(now())
+}
+
+model InventorySnapshot {
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  date      DateTime // UTC midnight of the snapshot day
+  onHand    Float
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, date])
+  @@index([tenantId, date])
 }
