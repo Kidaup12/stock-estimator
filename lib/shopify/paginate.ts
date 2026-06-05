@@ -47,7 +47,9 @@ export async function fetchProductsSince(shopDomain: string, sinceIso: string) {
           pageInfo { hasNextPage endCursor }
         }
       }`,
-      variables: { after, q: `updated_at:>=${sinceIso}` },
+      // status:active — exclude draft/archived from the catalog (reorder tool
+      // only cares about sellable products). Space-separated terms are ANDed.
+      variables: { after, q: `updated_at:>=${sinceIso} status:active` },
     }),
     (d) => ({
       nodes: d.products.edges.map((e: any) => ({
