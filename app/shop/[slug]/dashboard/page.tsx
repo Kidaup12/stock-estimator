@@ -145,6 +145,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
             <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
+            <Link href={`/shop/${slug}/purchase-orders`} className="btn-ghost">Purchase Orders</Link>
             <Link href={`/shop/${slug}/promos`} className="btn-ghost">Promos</Link>
             <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
             <Link href="/pricing" className="btn-ghost">Pricing</Link>
