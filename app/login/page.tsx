@@ -93,6 +93,17 @@ function LoginForm() {
             <button type="submit" disabled={loading} className="btn-primary w-full disabled:opacity-60">
               {loading ? "Sending…" : "Email me a code"}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!email) { setError("Enter your email first."); return; }
+                setError(null);
+                setStep("code");
+              }}
+              className="btn-ghost w-full"
+            >
+              I already have a code
+            </button>
           </form>
         ) : (
           <form onSubmit={verifyCode} className="space-y-3">
