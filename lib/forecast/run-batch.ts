@@ -80,7 +80,8 @@ export async function runForecastsForTenant(
     currentStock: p.currentStock,
     abcCategory: abcMap[p.id] ?? "C",
     history: historyByProduct.get(p.id) ?? [],
-    leadTimeAvg: p.supplier?.leadTimeAvgDays ?? 30,
+    // Per-product lead time wins; fall back to supplier, then 30±7 default.
+    leadTimeAvg: p.leadTimeDays ?? p.supplier?.leadTimeAvgDays ?? 30,
     leadTimeStd: p.supplier?.leadTimeStdDays ?? 7,
     activePromos: promosShaped,
     runDateKey,

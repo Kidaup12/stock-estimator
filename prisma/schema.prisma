@@ -65,6 +65,7 @@ model Product {
   onOrder           Int       @default(0)
   expectedArrivalAt DateTime?
   receivedAt        DateTime?
+  leadTimeDays      Int?      // per-product lead-time override (days); null → supplier default
 
   tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   supplier           Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)

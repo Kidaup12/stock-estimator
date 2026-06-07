@@ -73,7 +73,8 @@ export async function POST() {
   for (const p of products) {
     const history = historyByProduct.get(p.id) ?? [];
     const supplier = p.supplier;
-    const leadAvg = supplier?.leadTimeAvgDays ?? 30;
+    // Per-product lead time wins; fall back to supplier, then 30±7 default.
+    const leadAvg = p.leadTimeDays ?? supplier?.leadTimeAvgDays ?? 30;
     const leadStd = supplier?.leadTimeStdDays ?? 7;
     const abc = abcMap[p.id] ?? "C";
 

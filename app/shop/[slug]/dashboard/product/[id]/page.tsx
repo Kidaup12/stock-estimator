@@ -19,6 +19,9 @@ type Detail = {
     imageUrl: string | null;
     currentStock: number;
     abcCategory: string | null;
+    onOrder: number;
+    expectedArrivalAt: string | null;
+    leadTimeDays: number | null;
     supplier: { id: string; name: string; leadTimeAvgDays: number; leadTimeStdDays: number } | null;
   };
   history: {
@@ -70,6 +73,15 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ supplierId: supplierId || null }),
+    });
+    await load();
+  }
+
+  async function setLeadTime(leadTimeDays: string) {
+    await apiFetch(slug, `/api/products/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ leadTimeDays: leadTimeDays === "" ? null : leadTimeDays }),
     });
     await load();
   }
@@ -250,9 +262,30 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           </div>
           {product.supplier && (
             <div className="mt-3 text-sm text-ink-soft num">
-              Lead time: {product.supplier.leadTimeAvgDays}d ± {product.supplier.leadTimeStdDays}d
+              Supplier lead time: {product.supplier.leadTimeAvgDays}d ± {product.supplier.leadTimeStdDays}d
             </div>
           )}
+          <div className="mt-4 pt-4 border-t border-line">
+            <label className="text-2xs uppercase tracking-wider text-mute" htmlFor="leadOverride">
+              Lead time override (days)
+            </label>
+            <div className="flex items-center gap-3 mt-1.5">
+              <input
+                id="leadOverride"
+                key={product.leadTimeDays ?? "none"}
+                type="number"
+                min={1}
+                inputMode="numeric"
+                defaultValue={product.leadTimeDays ?? ""}
+                placeholder={`default ${product.supplier?.leadTimeAvgDays ?? 30}`}
+                onBlur={e => setLeadTime(e.target.value)}
+                className="input max-w-[8rem]"
+              />
+              <span className="text-2xs text-mute">
+                Per-product. Blank = use supplier ({product.supplier?.leadTimeAvgDays ?? 30}d). Drives safety stock + reorder point.
+              </span>
+            </div>
+          </div>
         </section>
       </div>
     </main>

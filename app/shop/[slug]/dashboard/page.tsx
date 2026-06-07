@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
+import { downloadFile } from "@/lib/download";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -21,6 +22,9 @@ type Prediction = {
     imageUrl: string | null;
     currentStock: number;
     abcCategory: string | null;
+    onOrder: number;
+    expectedArrivalAt: string | null;
+    leadTimeDays: number | null;
   };
   finalForecast30d: number;
   layer1Forecast30d: number;
@@ -32,6 +36,10 @@ type Prediction = {
   confidence: number;
   urgency: "critical" | "high" | "medium" | "low";
   signals: Signal[];
+  runRate: number;
+  onOrder: number;
+  expectedArrivalAt: string | null;
+  leadTimeDays: number | null;
   sales30Qty: number;
   sales30Revenue: number;
   sales90Qty: number;
@@ -210,13 +218,24 @@ export default function Dashboard() {
             <TabBtn active={tab === "dead"} onClick={() => setTab("dead")} label="Dead stock" count={dead.length} />
             <TabBtn active={tab === "all"} onClick={() => setTab("all")} label="All" count={all.length} />
           </div>
-          <input
-            type="search"
-            placeholder="Search products, SKU, brand…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="input max-w-sm"
-          />
+          <div className="flex items-center gap-2">
+            {(tab === "reorder" || tab === "all") && (
+              <button
+                type="button"
+                onClick={() => downloadFile(slug, `/api/forecast/export?tab=${tab}`, `${tab}-${new Date().toISOString().slice(0, 10)}.csv`)}
+                className="btn-ghost text-sm whitespace-nowrap"
+              >
+                Download CSV
+              </button>
+            )}
+            <input
+              type="search"
+              placeholder="Search products, SKU, brand…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="input max-w-sm"
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -312,14 +331,20 @@ function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stoc
             </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-3 mt-3 text-sm">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-3 text-sm">
             <Mini label="Stock" value={p.product.currentStock.toFixed(0)} tone={p.product.currentStock <= 0 ? "bad" : undefined} />
+            <Mini label="Run/day" value={p.runRate.toFixed(2)} sub="sales/day" />
             <Mini label="Days left" value={`${p.daysUntilStockout}d`} tone={p.daysUntilStockout < 7 ? "bad" : "default"} />
+            <Mini
+              label="En route"
+              value={p.onOrder.toFixed(0)}
+              sub={p.product.expectedArrivalAt ? `ETA ${new Date(p.product.expectedArrivalAt).toLocaleDateString("en-KE")}` : undefined}
+            />
             <Mini label="30d forecast" value={p.finalForecast30d.toFixed(0)} />
             <Mini
               label="Reorder qty"
               value={`${p.recommendedQty.toFixed(0)}`}
-              sub={`Cost KES ${KESshort(p.reorderCostKes)} → revenue KES ${KESshort(p.reorderRevenueKes)}`}
+              sub={`net of en-route · cost KES ${KESshort(p.reorderCostKes)}`}
               tone="accent"
             />
           </div>
@@ -416,6 +441,8 @@ function AllTable({ predictions }: { predictions: Prediction[] }) {
               <th className="px-5 py-3 font-medium">Type</th>
               <th className="px-5 py-3 font-medium text-center">ABC</th>
               <th className="px-5 py-3 font-medium text-right">Stock</th>
+              <th className="px-5 py-3 font-medium text-right">Run/day</th>
+              <th className="px-5 py-3 font-medium text-right">En route</th>
               <th className="px-5 py-3 font-medium text-right">Days</th>
               <th className="px-5 py-3 font-medium text-right">30d rev</th>
               <th className="px-5 py-3 font-medium text-right">Reorder</th>
@@ -438,6 +465,8 @@ function AllTable({ predictions }: { predictions: Prediction[] }) {
                   }`}>{p.product.abcCategory || "C"}</span>
                 </td>
                 <td className={`px-5 py-3 text-right num ${p.product.currentStock < 5 ? "text-status-bad font-semibold" : ""}`}>{p.product.currentStock.toFixed(0)}</td>
+                <td className="px-5 py-3 text-right num">{p.runRate.toFixed(2)}</td>
+                <td className="px-5 py-3 text-right num">{p.onOrder > 0 ? p.onOrder.toFixed(0) : "—"}</td>
                 <td className={`px-5 py-3 text-right num ${p.daysUntilStockout < 14 ? "text-status-bad font-semibold" : ""}`}>{p.daysUntilStockout}</td>
                 <td className="px-5 py-3 text-right num">KES {KESshort(p.sales30Revenue)}</td>
                 <td className="px-5 py-3 text-right num font-semibold text-accent-700">{p.recommendedQty > 0 ? p.recommendedQty.toFixed(0) : "—"}</td>

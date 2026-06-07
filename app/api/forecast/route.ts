@@ -123,6 +123,9 @@ export async function GET() {
           imageUrl: p.product.imageUrl,
           currentStock: p.product.currentStock,
           abcCategory: p.product.abcCategory,
+          onOrder: p.product.onOrder,
+          expectedArrivalAt: p.product.expectedArrivalAt,
+          leadTimeDays: p.product.leadTimeDays,
         },
         runDate: p.runDate,
         layer1Forecast30d: p.layer1Forecast30d,
@@ -139,6 +142,10 @@ export async function GET() {
         signals: JSON.parse(p.signals || "[]"),
         sales30Qty: s30?.qty ?? 0,
         sales30Revenue: s30?.rev ?? 0,
+        runRate: Math.round(((s30?.qty ?? 0) / 30) * 100) / 100, // historical sales/day (30d)
+        onOrder: p.product.onOrder, // en-route (Shopify Incoming/QB location)
+        expectedArrivalAt: p.product.expectedArrivalAt,
+        leadTimeDays: p.product.leadTimeDays,
         sales90Qty: s90?.qty ?? 0,
         sales90Revenue: s90?.rev ?? 0,
         stockValueKes: p.product.currentStock * p.product.costKes, // capital tied up at cost

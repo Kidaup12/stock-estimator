@@ -54,6 +54,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       imageUrl: product.imageUrl,
       currentStock: product.currentStock,
       abcCategory: product.abcCategory,
+      onOrder: product.onOrder,
+      expectedArrivalAt: product.expectedArrivalAt,
+      leadTimeDays: product.leadTimeDays,
       supplier: product.supplier
         ? {
             id: product.supplier.id,
@@ -91,8 +94,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
+
   const body = await req.json().catch(() => ({}));
-  const supplierId = typeof body.supplierId === "string" ? body.supplierId : null;
-  const product = await prisma.product.update({ where: { id }, data: { supplierId } });
-  return NextResponse.json({ product });
+  const data: { supplierId?: string | null; leadTimeDays?: number | null } = {};
+  if ("supplierId" in body) data.supplierId = typeof body.supplierId === "string" ? body.supplierId : null;
+  if ("leadTimeDays" in body) {
+    const n = Number.parseInt(body.leadTimeDays, 10);
+    data.leadTimeDays = Number.isFinite(n) && n > 0 ? n : null; // blank/invalid → clear override
+  }
+
+  // Tenant-scoped write (updateMany so the where carries tenantId).
+  await prisma.product.updateMany({ where: { id, tenantId: tenant.id }, data });
+  return NextResponse.json({ ok: true });
 }

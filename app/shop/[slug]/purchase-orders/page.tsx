@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
+import { downloadFile } from "@/lib/download";
 
 type PoRow = {
   id: string;
@@ -19,33 +20,10 @@ type PoRow = {
 
 const KES = (n: number) => `KES ${n.toLocaleString("en-KE", { maximumFractionDigits: 0 })}`;
 
-/**
- * Download helper: uses apiFetch (attaches x-tenant-slug header) to fetch the
- * binary response, then triggers a blob-URL download. window.open() cannot send
- * custom headers, so we must use fetch+blob to honour tenant context.
- */
-async function downloadFile(slug: string, path: string, filename: string) {
-  const res = await apiFetch(slug, path);
-  if (!res.ok) {
-    alert(`Download failed (${res.status})`);
-    return;
-  }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 export default function PurchaseOrdersPage() {
   const { slug } = useParams<{ slug: string }>();
   const [pos, setPos] = useState<PoRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
 
   function load() {
     apiFetch(slug, "/api/purchase-orders")
@@ -60,22 +38,6 @@ export default function PurchaseOrdersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function generate() {
-    setGenerating(true);
-    try {
-      const r = await apiFetch(slug, "/api/purchase-orders/generate", { method: "POST" });
-      const d = await r.json();
-      alert(
-        d.created > 0
-          ? `Generated ${d.created} purchase order(s).`
-          : "No approved orders to turn into POs."
-      );
-      load();
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   return (
     <main className="min-h-screen bg-canvas">
       <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
@@ -86,13 +48,6 @@ export default function PurchaseOrdersPage() {
           >
             ← Dashboard
           </Link>
-          <button
-            onClick={generate}
-            disabled={generating}
-            className="text-2xs px-3 py-1.5 rounded border border-ink text-ink disabled:opacity-50"
-          >
-            {generating ? "Generating…" : "Generate POs"}
-          </button>
         </div>
       </header>
 
