@@ -112,36 +112,25 @@ export async function reconcileTenant(
     const localId = await upsertProductFromShopify(tenantId, p, onHandByGid.get(p.id) ?? 0);
     productIdByGid.set(p.id, localId);
   }
-  // For products NOT in this delta, still refresh currentStock from on_hand.
-  if (onHandByGid.size > 0) {
-    const known = await prisma.product.findMany({
-      where: { tenantId },
-      select: { id: true, shopifyProductId: true },
+  // AUTHORITATIVE refresh for EVERY product. The location fetch is a FULL refresh,
+  // so a product absent from the on_hand data has ZERO sellable stock — reset it,
+  // don't leave a stale inflated currentStock. Same for en-route → onOrder. Without
+  // this, sold-out SKUs keep old values and currentStock drifts way above reality.
+  const known = await prisma.product.findMany({
+    where: { tenantId },
+    select: { id: true, shopifyProductId: true },
+  });
+  for (const k of known) {
+    if (!productIdByGid.has(k.shopifyProductId)) productIdByGid.set(k.shopifyProductId, k.id);
+    await prisma.product.update({
+      where: { id: k.id },
+      data: {
+        currentStock: onHandByGid.get(k.shopifyProductId) ?? 0,
+        onOrder: Math.round(enrouteByGid.get(k.shopifyProductId) ?? 0),
+      },
     });
-    for (const k of known) {
-      if (!productIdByGid.has(k.shopifyProductId) && onHandByGid.has(k.shopifyProductId)) {
-        await prisma.product.update({
-          where: { id: k.id },
-          data: { currentStock: onHandByGid.get(k.shopifyProductId)! },
-        });
-        productIdByGid.set(k.shopifyProductId, k.id);
-      } else if (!productIdByGid.has(k.shopifyProductId)) {
-        productIdByGid.set(k.shopifyProductId, k.id);
-      }
-    }
   }
   await setCursor(tenantId, "products", runStart);
-
-  // En-route (Incoming/QB location) → Product.onOrder. The Incoming location is the
-  // authoritative source of "ordered, not yet received"; set it for ALL known
-  // products (0 when not present) so the dashboard "En route" column + the reorder
-  // math (which subtracts onOrder) reflect reality.
-  for (const [gid, productId] of productIdByGid) {
-    await prisma.product.update({
-      where: { id: productId },
-      data: { onOrder: Math.round(enrouteByGid.get(gid) ?? 0) },
-    });
-  }
 
   // Locations + inventory levels (primary = first ACTIVE SELLABLE location —
   // never the en-route/virtual buckets).
