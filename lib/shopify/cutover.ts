@@ -21,6 +21,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isSellableLocation, isEnrouteLocation } from "./locations";
 import {
   upsertProductFromShopify,
   upsertLocationFromShopify,
@@ -51,18 +52,31 @@ export type CutoverResult =
       productCount: number;
     };
 
-/** Sum of on_hand across all locations, keyed by Shopify product gid. */
-function sumOnHandByProductGid(locations: ShopifyLocationNode[]): Map<string, number> {
-  const out = new Map<string, number>();
+/**
+ * Sum on_hand per product gid, split by location type: `sellable` → currentStock,
+ * `enroute` (Incoming/QB) → onOrder. Virtual/non-sellable ignored (never counted).
+ */
+function sumOnHandByType(locations: ShopifyLocationNode[]): {
+  sellable: Map<string, number>;
+  enroute: Map<string, number>;
+} {
+  const sellable = new Map<string, number>();
+  const enroute = new Map<string, number>();
   for (const loc of locations) {
+    const target = isSellableLocation(loc.name)
+      ? sellable
+      : isEnrouteLocation(loc.name)
+        ? enroute
+        : null;
+    if (!target) continue;
     for (const level of loc.inventoryLevels ?? []) {
       const gid = level.item?.variant?.product?.id;
       if (!gid) continue;
       const onHand = level.quantities?.find((q) => q.name === "on_hand")?.quantity ?? 0;
-      out.set(gid, (out.get(gid) ?? 0) + onHand);
+      target.set(gid, (target.get(gid) ?? 0) + onHand);
     }
   }
-  return out;
+  return { sellable, enroute };
 }
 
 export async function cutoverToReal(
@@ -85,18 +99,23 @@ export async function cutoverToReal(
   ]);
 
   // 2) Insert real products (idempotent upserts), capturing gid -> local id.
-  const onHandByGid = sumOnHandByProductGid(realData.locations);
+  //    currentStock = SELLABLE on_hand only; en-route (Incoming/QB) -> onOrder.
+  const { sellable: onHandByGid, enroute: enrouteByGid } = sumOnHandByType(realData.locations);
   const productIdByGid = new Map<string, string>();
   for (const p of realData.products) {
     const localId = await upsertProductFromShopify(tenantId, p, onHandByGid.get(p.id) ?? 0);
     productIdByGid.set(p.id, localId);
+    const enroute = Math.round(enrouteByGid.get(p.id) ?? 0);
+    if (enroute > 0) await prisma.product.update({ where: { id: localId }, data: { onOrder: enroute } });
   }
 
-  // 3) Locations (first active = primary) + on_hand inventory levels.
+  // 3) Locations (first active SELLABLE = primary) + on_hand inventory levels.
   let locationsInserted = 0;
   let inventoryLevels = 0;
   const primaryGid =
-    realData.locations.find((l) => l.isActive)?.id ?? realData.locations[0]?.id ?? null;
+    realData.locations.find((l) => l.isActive && isSellableLocation(l.name))?.id ??
+    realData.locations.find((l) => isSellableLocation(l.name))?.id ??
+    null;
   for (const loc of realData.locations) {
     const locationId = await upsertLocationFromShopify(tenantId, loc, {
       isPrimary: loc.id === primaryGid,
