@@ -125,7 +125,7 @@ export default function ReportsPage() {
               const totalH = (m.revenueKes / maxMonthRev) * 100;
               const costShare = m.revenueKes > 0 ? (m.cogsKes / m.revenueKes) : 0;
               return (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5" title={`${m.month}: KES ${KES(m.revenueKes)} rev · KES ${KES(m.grossProfitKes)} margin (${m.revenueKes > 0 ? ((m.grossProfitKes/m.revenueKes)*100).toFixed(0) : 0}%)`}>
+                <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5" title={`${m.month}: KES ${KES(m.revenueKes)} rev · KES ${KES(m.grossProfitKes)} margin (${m.revenueKes > 0 ? ((m.grossProfitKes/m.revenueKes)*100).toFixed(0) : 0}%)`}>
                   <div className="text-[10px] text-mute num">{KESshort(m.revenueKes)}</div>
                   <div className="flex-1 w-full flex items-end">
                     <div className="w-full rounded-t overflow-hidden flex flex-col-reverse" style={{ height: `${totalH}%` }}>

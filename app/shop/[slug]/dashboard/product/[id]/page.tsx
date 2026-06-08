@@ -226,7 +226,7 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           </div>
           <div className="flex items-end gap-1.5 h-32">
             {history.byMonth.slice(-12).map(m => (
-              <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5">
+              <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5">
                 <div className="flex-1 w-full flex items-end">
                   <div
                     className="w-full bg-accent-500 hover:bg-accent-600 transition rounded-t-md"
