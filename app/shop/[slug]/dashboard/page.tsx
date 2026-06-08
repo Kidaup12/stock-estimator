@@ -195,7 +195,7 @@ export default function Dashboard() {
               {monthly.slice(-12).map(m => {
                 const h = (m.revenueKes / maxMonthlyRev) * 100;
                 return (
-                  <div key={m.month} className="flex-1 flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
+                  <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
                     <div className="flex-1 w-full flex items-end">
                       <div
                         className="w-full rounded-t bg-accent-500 group-hover:bg-accent-600 transition"
