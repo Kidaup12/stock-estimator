@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       where: { tenantId },
       select: {
         id: true, title: true, sku: true, abcCategory: true, currentStock: true,
-        onOrder: true, expectedArrivalAt: true,
+        onOrder: true, expectedArrivalAt: true, leadTimeDays: true,
         supplier: { select: { leadTimeAvgDays: true, leadTimeStdDays: true } },
       },
     }),
@@ -60,8 +60,10 @@ export async function GET(req: NextRequest) {
     currentStock: p.currentStock,
     onOrder: p.onOrder,
     expectedArrivalAt: p.expectedArrivalAt,
-    leadTimeAvgDays: p.supplier?.leadTimeAvgDays ?? null,
-    leadTimeStdDays: p.supplier?.leadTimeStdDays ?? null,
+    // Lead time precedence mirrors the forecast: per-product override → supplier avg → 30d default.
+    // Per-product lead has no std, so show a bare number (std null) instead of the supplier's "30±7".
+    leadTimeAvgDays: p.leadTimeDays ?? p.supplier?.leadTimeAvgDays ?? 30,
+    leadTimeStdDays: p.leadTimeDays != null ? null : (p.supplier?.leadTimeStdDays ?? null),
     soldInWindow: soldByProduct.get(p.id) ?? 0,
     snapshotOnHand: openingByProduct.get(p.id) ?? null,
   }));

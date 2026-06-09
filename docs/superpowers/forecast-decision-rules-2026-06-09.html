@@ -1,0 +1,714 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Forecast Retest — Decision Rules</title>
+<style>
+  :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff;--good:#16a34a;--warn:#b45309;}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{margin:12mm;} @media print{.wrap{max-width:none;padding:0;} table{break-inside:avoid;} h2{break-after:avoid;}}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 22px 80px;}
+  h1{font-size:25px;margin:0 0 4px;} h2{font-size:18px;margin:34px 0 8px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  h2 .n{color:var(--muted);font-weight:400;font-size:13px;}
+  .sub-h{color:var(--muted);margin:0 0 20px;font-size:13.5px;}
+  .rules{background:linear-gradient(135deg,#eff6ff,#ecfdf5);border:1px solid #bfdbfe;border-radius:14px;padding:18px 22px;}
+  .rules li{margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:13.5px;}
+  th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:#f1f5f9;font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:#475569;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  td.best{background:#f0fdf4;font-weight:650;color:var(--good);}
+  tr:last-child td{border-bottom:none;}
+  .flag{color:var(--warn);font-weight:700;}
+  .note{color:var(--muted);font-size:12.5px;margin:4px 0 10px;}
+  .foot{color:var(--muted);font-size:12px;margin-top:40px;border-top:1px solid var(--line);padding-top:14px;}
+</style></head><body><div class="wrap">
+<h1>Forecast Retest — Decision Rules</h1>
+<p class="sub-h">Same walk-forward cases as the first report (Beauty Square, Dec 2025 → Jun 2026), re-scored with simpler run-rates, a 3×-best-month safety cap, and hybrid model policies — sliced by product bucket and history length. Lower typical miss (median units off per product-month) = better.</p>
+<div class="rules">
+<b>The decision rules (what the data says to do with ~6 months of history):</b>
+<ol>
+<li><b>Always cap every forecast at 3× the product's best trailing month.</b> Kills all blow-ups at zero accuracy cost. Ship first.</li>
+<li><b>Product has &lt;60 days of history → last-30-day run rate</b> (longer windows divide by days that don't exist and under-forecast).</li>
+<li><b>Product has 60+ days → weighted run rate (30/90/365 blend)</b> — won every bucket, steady and lumpy. Already in the codebase.</li>
+<li><b>Drop SARIMA now</b> (worst + only blow-up source). <b>Croston/TSB too</b> — loses to the weighted rate on its own lumpy bucket. Shelved, not serving.</li>
+<li><b>Calendar boosts off</b> until a holiday season exists in the data; re-test per-signal then.</li>
+<li><b>SES tested, not adopted:</b> loses to the weighted rate on every clean month (Jan/Feb/Mar); its apparent overall win comes entirely from the gap-affected Apr→May round. Re-test after the backfill repairs May.</li>
+<li><b>XGBoost stays shelved</b> (no out-of-sample benefit, round 1).</li>
+<li><b>Re-run this backtest monthly</b>; flip models only when one beats the weighted rate with the cap on.</li>
+</ol>
+<p class="note" style="margin:6px 0 0">Honesty note: Apr→May biases are over-stated (May sales data thin — sync gap). Rankings hold.</p>
+</div>
+<h2>Overall — all strategies <span class="n">(n=298)</span></h2>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">8.3</td>
+      <td class="num">13.2</td>
+      <td class="num">+9.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">8.3</td>
+      <td class="num">13.2</td>
+      <td class="num">+9.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">8.9</td>
+      <td class="num">14.0</td>
+      <td class="num">+8.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">8.9</td>
+      <td class="num">14.0</td>
+      <td class="num">+8.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">10.0</td>
+      <td class="num">14.8</td>
+      <td class="num">+5.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">10.0</td>
+      <td class="num">14.8</td>
+      <td class="num">+5.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num">7.7</td>
+      <td class="num">11.7</td>
+      <td class="num">+4.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num">7.7</td>
+      <td class="num">11.7</td>
+      <td class="num">+4.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num">6.4</td>
+      <td class="num">11.9</td>
+      <td class="num">+6.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num">6.4</td>
+      <td class="num">11.9</td>
+      <td class="num">+6.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num best">6.1</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num best">6.1</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num">11.1</td>
+      <td class="num">17.0</td>
+      <td class="num">+13.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num">11.1</td>
+      <td class="num">17.0</td>
+      <td class="num">+13.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">12.0</td>
+      <td class="num">603.8</td>
+      <td class="num">+600.3</td>
+      <td class="num"><span class="flag">2</span></td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">12.0</td>
+      <td class="num">24.4</td>
+      <td class="num">+20.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">10.0</td>
+      <td class="num">15.5</td>
+      <td class="num">+10.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">10.0</td>
+      <td class="num">15.5</td>
+      <td class="num">+10.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">9.7</td>
+      <td class="num">14.3</td>
+      <td class="num">+8.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">9.7</td>
+      <td class="num">14.3</td>
+      <td class="num">+8.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num">7.6</td>
+      <td class="num">11.5</td>
+      <td class="num">+5.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num">7.6</td>
+      <td class="num">11.5</td>
+      <td class="num">+5.8</td>
+      <td class="num">0</td></tr></tbody></table>
+<h2>Steady sellers (SARIMA-routed bucket) <span class="n">(n=97)</span></h2><p class="note">Products with regular daily sales — the bucket where SARIMA ran (and sometimes blew up).</p>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">16.9</td>
+      <td class="num">18.6</td>
+      <td class="num">+15.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">16.9</td>
+      <td class="num">18.6</td>
+      <td class="num">+15.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">17.0</td>
+      <td class="num">20.5</td>
+      <td class="num">+11.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">17.0</td>
+      <td class="num">20.5</td>
+      <td class="num">+11.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">17.0</td>
+      <td class="num">22.9</td>
+      <td class="num">+5.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">17.0</td>
+      <td class="num">22.9</td>
+      <td class="num">+5.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num">12.5</td>
+      <td class="num">16.7</td>
+      <td class="num">+4.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num">12.5</td>
+      <td class="num">16.7</td>
+      <td class="num">+4.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num best">11.2</td>
+      <td class="num">18.1</td>
+      <td class="num">+13.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num best">11.2</td>
+      <td class="num">18.1</td>
+      <td class="num">+13.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num">12.6</td>
+      <td class="num">21.4</td>
+      <td class="num">+15.1</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num">12.6</td>
+      <td class="num">21.4</td>
+      <td class="num">+15.1</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num">20.3</td>
+      <td class="num">24.4</td>
+      <td class="num">+21.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num">20.3</td>
+      <td class="num">24.4</td>
+      <td class="num">+21.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">34.2</td>
+      <td class="num">1828.0</td>
+      <td class="num">+1823.6</td>
+      <td class="num"><span class="flag">2</span></td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">34.2</td>
+      <td class="num">47.9</td>
+      <td class="num">+43.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">17.0</td>
+      <td class="num">20.5</td>
+      <td class="num">+11.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">17.0</td>
+      <td class="num">20.5</td>
+      <td class="num">+11.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">12.5</td>
+      <td class="num">16.7</td>
+      <td class="num">+4.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">12.5</td>
+      <td class="num">16.7</td>
+      <td class="num">+4.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num">12.2</td>
+      <td class="num">16.3</td>
+      <td class="num">+9.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num">12.2</td>
+      <td class="num">16.3</td>
+      <td class="num">+9.2</td>
+      <td class="num">0</td></tr></tbody></table>
+<h2>Slow / lumpy sellers (Croston-TSB bucket) <span class="n">(n=201)</span></h2><p class="note">Products selling occasionally — ~2/3 of the catalog. Dave's 'keep Croston' claim is tested here.</p>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">7.2</td>
+      <td class="num">10.6</td>
+      <td class="num">+6.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">7.2</td>
+      <td class="num">10.6</td>
+      <td class="num">+6.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">7.8</td>
+      <td class="num">10.8</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">7.8</td>
+      <td class="num">10.8</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">8.3</td>
+      <td class="num">11.0</td>
+      <td class="num">+5.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">8.3</td>
+      <td class="num">11.0</td>
+      <td class="num">+5.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num">6.4</td>
+      <td class="num">9.3</td>
+      <td class="num">+3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num">6.4</td>
+      <td class="num">9.3</td>
+      <td class="num">+3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num">5.4</td>
+      <td class="num">8.9</td>
+      <td class="num">+3.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num">5.4</td>
+      <td class="num">8.9</td>
+      <td class="num">+3.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num best">5.4</td>
+      <td class="num">9.6</td>
+      <td class="num">+2.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num best">5.4</td>
+      <td class="num">9.6</td>
+      <td class="num">+2.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num">10.1</td>
+      <td class="num">13.5</td>
+      <td class="num">+9.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num">10.1</td>
+      <td class="num">13.5</td>
+      <td class="num">+9.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">8.6</td>
+      <td class="num">13.1</td>
+      <td class="num">+10.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num">6.3</td>
+      <td class="num">9.2</td>
+      <td class="num">+4.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num">6.3</td>
+      <td class="num">9.2</td>
+      <td class="num">+4.2</td>
+      <td class="num">0</td></tr></tbody></table>
+<h2>Products with <60 days of history <span class="n">(n=35)</span></h2>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">9.8</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">9.8</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">12.9</td>
+      <td class="num">16.0</td>
+      <td class="num">-7.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">12.9</td>
+      <td class="num">16.0</td>
+      <td class="num">-7.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">15.2</td>
+      <td class="num">20.2</td>
+      <td class="num">-16.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">15.2</td>
+      <td class="num">20.2</td>
+      <td class="num">-16.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num">12.6</td>
+      <td class="num">15.0</td>
+      <td class="num">-7.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num">12.6</td>
+      <td class="num">15.0</td>
+      <td class="num">-7.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num">13.5</td>
+      <td class="num">19.1</td>
+      <td class="num">+11.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num">13.5</td>
+      <td class="num">19.1</td>
+      <td class="num">+11.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num">13.5</td>
+      <td class="num">23.0</td>
+      <td class="num">+14.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num">13.5</td>
+      <td class="num">23.0</td>
+      <td class="num">+14.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num best">9.2</td>
+      <td class="num">12.2</td>
+      <td class="num">+4.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num best">9.2</td>
+      <td class="num">12.2</td>
+      <td class="num">+4.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">28.8</td>
+      <td class="num">4982.9</td>
+      <td class="num">+4974.7</td>
+      <td class="num"><span class="flag">2</span></td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">28.8</td>
+      <td class="num">54.1</td>
+      <td class="num">+45.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">13.7</td>
+      <td class="num">16.7</td>
+      <td class="num">-4.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">13.7</td>
+      <td class="num">16.7</td>
+      <td class="num">-4.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">13.6</td>
+      <td class="num">15.7</td>
+      <td class="num">-3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">13.6</td>
+      <td class="num">15.7</td>
+      <td class="num">-3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num">9.8</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num">9.8</td>
+      <td class="num">13.5</td>
+      <td class="num">+6.7</td>
+      <td class="num">0</td></tr></tbody></table>
+<h2>Products with 60–89 days of history <span class="n">(n=80)</span></h2>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">8.1</td>
+      <td class="num">15.1</td>
+      <td class="num">+7.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">8.1</td>
+      <td class="num">15.1</td>
+      <td class="num">+7.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">6.8</td>
+      <td class="num">12.1</td>
+      <td class="num">+3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">6.8</td>
+      <td class="num">12.1</td>
+      <td class="num">+3.8</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">9.7</td>
+      <td class="num">13.2</td>
+      <td class="num">-3.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">9.7</td>
+      <td class="num">13.2</td>
+      <td class="num">-3.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num best">6.7</td>
+      <td class="num">12.5</td>
+      <td class="num">-1.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num best">6.7</td>
+      <td class="num">12.5</td>
+      <td class="num">-1.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num">9.6</td>
+      <td class="num">15.9</td>
+      <td class="num">+6.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num">9.6</td>
+      <td class="num">15.9</td>
+      <td class="num">+6.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num">11.9</td>
+      <td class="num">18.0</td>
+      <td class="num">+7.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num">11.9</td>
+      <td class="num">18.0</td>
+      <td class="num">+7.5</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num">7.8</td>
+      <td class="num">13.9</td>
+      <td class="num">+6.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num">7.8</td>
+      <td class="num">13.9</td>
+      <td class="num">+6.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">12.7</td>
+      <td class="num">23.8</td>
+      <td class="num">+18.1</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">12.7</td>
+      <td class="num">22.8</td>
+      <td class="num">+17.1</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">8.3</td>
+      <td class="num">15.9</td>
+      <td class="num">+8.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">8.3</td>
+      <td class="num">15.9</td>
+      <td class="num">+8.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">8.7</td>
+      <td class="num">16.0</td>
+      <td class="num">+5.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">8.7</td>
+      <td class="num">16.0</td>
+      <td class="num">+5.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num best">6.7</td>
+      <td class="num">12.5</td>
+      <td class="num">-1.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num best">6.7</td>
+      <td class="num">12.5</td>
+      <td class="num">-1.2</td>
+      <td class="num">0</td></tr></tbody></table>
+<h2>Products with 90+ days of history <span class="n">(n=183)</span></h2>
+      <table><thead><tr><th>Strategy</th><th class="num">Typical miss</th><th class="num">MAE</th><th class="num">Bias</th><th class="num">Blow-ups</th></tr></thead><tbody>
+      <tr><td>rate30</td>
+      <td class="num">8.0</td>
+      <td class="num">12.3</td>
+      <td class="num">+10.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate30 +cap</td>
+      <td class="num">8.0</td>
+      <td class="num">12.3</td>
+      <td class="num">+10.9</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60</td>
+      <td class="num">9.3</td>
+      <td class="num">14.4</td>
+      <td class="num">+13.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate60 +cap</td>
+      <td class="num">9.3</td>
+      <td class="num">14.4</td>
+      <td class="num">+13.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90</td>
+      <td class="num">9.3</td>
+      <td class="num">14.5</td>
+      <td class="num">+13.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>rate90 +cap</td>
+      <td class="num">9.3</td>
+      <td class="num">14.5</td>
+      <td class="num">+13.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted)</td>
+      <td class="num">7.3</td>
+      <td class="num">10.7</td>
+      <td class="num">+8.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>naive(weighted) +cap</td>
+      <td class="num">7.3</td>
+      <td class="num">10.7</td>
+      <td class="num">+8.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2</td>
+      <td class="num">4.5</td>
+      <td class="num">8.7</td>
+      <td class="num">+5.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.2 +cap</td>
+      <td class="num">4.5</td>
+      <td class="num">8.7</td>
+      <td class="num">+5.6</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3</td>
+      <td class="num best">4.3</td>
+      <td class="num">9.7</td>
+      <td class="num">+5.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>SES a=0.3 +cap</td>
+      <td class="num best">4.3</td>
+      <td class="num">9.7</td>
+      <td class="num">+5.3</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS</td>
+      <td class="num">13.4</td>
+      <td class="num">19.3</td>
+      <td class="num">+18.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>production TS +cap</td>
+      <td class="num">13.4</td>
+      <td class="num">19.3</td>
+      <td class="num">+18.4</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed)</td>
+      <td class="num">10.7</td>
+      <td class="num">19.9</td>
+      <td class="num">+18.2</td>
+      <td class="num">0</td></tr>
+      <tr><td>python (as routed) +cap</td>
+      <td class="num">10.7</td>
+      <td class="num">19.4</td>
+      <td class="num">+17.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady</td>
+      <td class="num">10.4</td>
+      <td class="num">15.1</td>
+      <td class="num">+14.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + rate60 steady +cap</td>
+      <td class="num">10.4</td>
+      <td class="num">15.1</td>
+      <td class="num">+14.0</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady</td>
+      <td class="num">10.1</td>
+      <td class="num">13.2</td>
+      <td class="num">+11.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>hybrid: TSB lumpy + naive steady +cap</td>
+      <td class="num">10.1</td>
+      <td class="num">13.2</td>
+      <td class="num">+11.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted</td>
+      <td class="num">7.3</td>
+      <td class="num">10.7</td>
+      <td class="num">+8.7</td>
+      <td class="num">0</td></tr>
+      <tr><td>RULE: rate30 if <60d else weighted +cap</td>
+      <td class="num">7.3</td>
+      <td class="num">10.7</td>
+      <td class="num">+8.7</td>
+      <td class="num">0</td></tr></tbody></table>
+<div class="foot">Generated by <code>scripts/walkforward-insights.ts</code>. Read-only — no DB writes. The "+cap" variants apply min(forecast, 3 × best trailing calendar month) — Dave's seatbelt. Hybrid = Croston-TSB for lumpy bucket, simple rate for steady bucket.</div>
+</div></body></html>

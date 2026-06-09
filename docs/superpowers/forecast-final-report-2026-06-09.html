@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Beauty Square Forecast — Final Report & Recommendation</title>
+<style>
+  :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff;--good:#16a34a;--warn:#b45309;--blue:#2563eb;}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{margin:13mm;} @media print{.wrap{max-width:none;padding:0;} table,.bigbox{break-inside:avoid;} h2{break-after:avoid;}}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:880px;margin:0 auto;padding:34px 24px 70px;}
+  h1{font-size:27px;margin:0 0 2px;} .tag{color:var(--muted);font-size:13.5px;margin-bottom:24px;}
+  h2{font-size:19px;margin:36px 0 10px;} h2 .em{font-size:22px;margin-right:6px;}
+  p{margin:8px 0;}
+  .bigbox{background:linear-gradient(135deg,#eff6ff,#ecfdf5);border:2px solid #93c5fd;border-radius:16px;padding:20px 24px;font-size:16.5px;}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px;margin:10px 0;}
+  th,td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:#f1f5f9;font-size:12px;text-transform:uppercase;letter-spacing:.03em;color:#475569;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  td.best{color:var(--good);font-weight:700;} tr.winrow td{background:#f0fdf4;}
+  td .d{display:block;color:var(--muted);font-size:12px;font-weight:400;}
+  tr:last-child td{border-bottom:none;}
+  .steps li{margin-bottom:10px;} .steps b{color:var(--blue);}
+  .note{color:var(--muted);font-size:12.5px;}
+  .foot{color:var(--muted);font-size:12px;margin-top:42px;border-top:1px solid var(--line);padding-top:14px;}
+</style></head><body><div class="wrap">
+
+<h1>Can our app predict what Beauty Square will sell?</h1>
+<div class="tag">Final report & recommendation · real sales data Dec 2025 – Jun 2026 · tested 298 product-months · 2026-06-10</div>
+
+<div class="bigbox"><b>The answer in one sentence:</b> Yes — but the <b>simple average wins</b>. The best forecast for a shop with ~6 months of history is the smart run rate the app already has, plus one safety cap. Every fancy model we tested (SARIMA, Croston, XGBoost, calendar boosts) made predictions <i>worse</i>, and one of them once predicted <b>173,318 units</b> for a product that sold <b>39</b>.</div>
+
+<h2><span class="em">🧪</span>How we tested (the time machine)</h2>
+<p>We pretended it was 31 January and let each model see only what it would have known that day. It predicted February. Then we checked February's real sales and scored the miss. Repeat for Feb→Mar, Mar→Apr, Apr→May. No model ever saw the future — exactly how it works in real life.</p>
+<p class="note">Score = "typical miss": for the middle-of-the-pack product, how many units off was the monthly prediction? Lower is better. "Crazy forecasts" counts predictions 20× larger than reality.</p>
+
+<h2><span class="em">🏆</span>The scoreboard (the three months with complete data)</h2>
+<table><thead><tr><th>Forecast method</th><th class="num">Typical miss<br/>(units/month)</th><th class="num">Average miss</th><th class="num">Crazy<br/>forecasts</th></tr></thead>
+<tbody><tr class="winrow"><td><b>⭐ Our proposed rule</b><span class="d">new products: 30-day average · everyone else: smart blend</span></td>
+      <td class="num best">6.9</td><td class="num">10.5</td><td class="num">0</td></tr><tr class=""><td><b>Smart average (run rate)</b><span class="d">blend of last 30/90/365-day averages — already in the app</span></td>
+      <td class="num">7.5</td><td class="num">11.1</td><td class="num">0</td></tr><tr class=""><td><b>Plain 30-day average</b><span class="d">units sold last 30 days ÷ 30</span></td>
+      <td class="num">8.0</td><td class="num">12.9</td><td class="num">0</td></tr><tr class=""><td><b>SES (exponential smoothing)</b><span class="d">a run rate that slowly favours recent days — Dave's suggestion</span></td>
+      <td class="num">10.9</td><td class="num">17.3</td><td class="num">0</td></tr><tr class=""><td><b>SES (faster version)</b><span class="d">same, reacts a bit quicker</span></td>
+      <td class="num">12.7</td><td class="num">20.2</td><td class="num">0</td></tr><tr class=""><td><b>Current app forecast</b><span class="d">smart average × holiday/payday boosts</span></td>
+      <td class="num">8.4</td><td class="num">12.8</td><td class="num">0</td></tr><tr class=""><td><b>Fancy math (SARIMA + Croston)</b><span class="d">statistics models, auto-picked per product</span></td>
+      <td class="num">16.6</td><td class="num">1048.1</td><td class="num">2</td></tr></tbody></table>
+<p class="note">Why three months and not four: May's sales records have a known gap (a sync issue), so the Apr→May round can't be scored fairly — models that guess low look falsely brilliant against missing data. (That's exactly how SES briefly "won" before we caught it.) Rankings above use Jan→Feb, Feb→Mar, Mar→Apr only.</p>
+
+<h2><span class="em">🔍</span>The three things we learned</h2>
+<p><b>1. Simple beat fancy — everywhere.</b> Steady sellers: smart average 8.8 vs SARIMA 36.7. Slow/lumpy sellers: smart average 5.6 vs Croston 8.8. Six months of history simply isn't enough for the clever math to find real patterns — it finds imaginary ones instead.</p>
+<p><b>2. The safety cap is free insurance.</b> Capping every forecast at 3× the product's best-ever month stopped both crazy forecasts completely and never hurt a single sane prediction. There is no reason not to ship this.</p>
+<p><b>3. The holiday/payday boosts are guessing.</b> The current app forecast is the smart average × boost multipliers — and the boosts made it ~45% less accurate, because no Christmas or Valentine's exists in 6 months of data to learn from. Turn them off until the data contains a real holiday season.</p>
+
+<h2><span class="em">📋</span>The recommendation (do this)</h2>
+<ol class="steps">
+<li><b>Ship the safety cap</b> — every forecast ≤ 3× the product's best trailing month.</li>
+<li><b>New products (&lt;60 days of sales): use the plain 30-day average.</b> (Longer averages divide by days the product didn't exist and guess too low: 9.5 vs 12.3 typical miss.)</li>
+<li><b>Everything else: use the smart average</b> (30/90/365-day blend — already in the app, zero new code).</li>
+<li><b>Turn the holiday/payday boosts off</b> until next January, then re-test them against real December data.</li>
+<li><b>Park SARIMA, Croston and XGBoost</b> — keep the code, don't serve it. They're for customers who arrive with 1+ year of clean history.</li>
+<li><b>Re-run this test every month</b> (it's one command now). The day a fancy model beats the smart average with the cap on — switch. Not before.</li>
+</ol>
+
+<h2><span class="em">🧰</span>The model menu (for any customer, by data size)</h2>
+<p><b>Customer has ~6 months of data (most e-commerce shops):</b></p>
+<table><thead><tr><th>Model</th><th>Verdict</th><th>Why (from our test)</th></tr></thead><tbody>
+    <tr><td><b>Run rate (moving / weighted average)</b></td><td>✅ Use it</td><td>Won every single bucket in our test (typical miss 7.5). Already built.</td></tr>
+    <tr><td><b>SES — simple exponential smoothing</b></td><td>🟡 Not yet</td><td>We tested it (α=0.2/0.3). On the three trustworthy months it lost to the run rate (10.9 vs 7.5) — every single month. It only "won" inside Apr→May — the month whose sales data has a hole, where predicting low looks smart. Re-test after the data backfill; not adopted today.</td></tr>
+    <tr><td><b>Croston / TSB</b> (for lumpy demand)</td><td>❌ Shelve</td><td>Stable (zero blow-ups) but LOST to the run rate on its own lumpy bucket: 8.8 vs 5.6. Stable-but-worse.</td></tr></tbody></table>
+<p><b>Customer has 1+ year of data:</b></p>
+<table><thead><tr><th>Model</th><th>Verdict</th><th>Why</th></tr></thead><tbody>
+    <tr><td><b>SARIMA / ARIMA</b></td><td>❌ Not now</td><td>Needs a year+. On 6 months it was the worst (36.7 on steady sellers) AND produced the 173,318-unit disaster.</td></tr>
+    <tr><td><b>Holt-Winters</b></td><td>⏳ Later</td><td>Needs full seasonal cycles (a year+). Revisit after Christmas data exists.</td></tr>
+    <tr><td><b>Prophet</b></td><td>⏳ Skip</td><td>Hungry for history & seasonality; would overfit on 6 months like the others.</td></tr>
+    <tr><td><b>XGBoost / ML</b></td><td>❌ Shelved</td><td>Proven in round 1: nothing to learn from 4 monthly snapshots; no out-of-sample benefit.</td></tr>
+    <tr><td><b>LSTM / neural nets</b></td><td>❌ No</td><td>Needs thousands of data points per product. A shop with 6 months isn't that.</td></tr></tbody></table>
+
+<h2><span class="em">⏭️</span>What would make forecasts genuinely better</h2>
+<p>Not a better model — <b>more history</b>. The single highest-impact action is backfilling the full year of Shopify orders (the <code>read_all_orders</code> scope). That's when Holt-Winters and SARIMA earn a re-trial, and when the holiday boosts can be calibrated on a real Christmas.</p>
+
+<div class="foot">Method: walk-forward backtest, 298 product-month cases across 4 origins (Jan–Apr 2026), scored vs real sales. Headline scoreboard uses the 170 cases from the three complete months; the Apr→May round is reported in the technical addendum but excluded here (May data gap). "Typical miss" = median absolute error. Read-only test — no production data touched. Generated by <code>scripts/walkforward-insights.ts</code>.</div>
+</div></body></html>

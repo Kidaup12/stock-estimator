@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Forecast Model Test — Walk-Forward Backtest</title>
+<style>
+  :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff;--good:#16a34a;--warn:#b45309;}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  @page{margin:12mm;}
+  @media print{.wrap{max-width:none;padding:0;}h2{break-after:avoid;}table,.card,ul.analysis li,.verdict{break-inside:avoid;}}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 22px 80px;}
+  h1{font-size:26px;margin:0 0 4px;}
+  h2{font-size:19px;margin:38px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .sub-h{color:var(--muted);margin:0 0 22px;font-size:13.5px;}
+  .verdict{background:linear-gradient(135deg,#ecfdf5,#eff6ff);border:1px solid #bbf7d0;border-radius:14px;padding:20px 22px;font-size:17px;}
+  .verdict.bad{background:linear-gradient(135deg,#fff7ed,#fef2f2);border-color:#fed7aa;}
+  .kpis{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 4px;}
+  .kpi{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .kpi .lab{color:var(--muted);font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;}
+  .kpi .val{font-size:26px;font-weight:650;margin-top:3px;}
+  .kpi .val.best{color:var(--good);}
+  .kpi .ksub{color:var(--muted);font-size:12px;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px;}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);}
+  th{background:#f1f5f9;font-size:12.5px;text-transform:uppercase;letter-spacing:.02em;color:#475569;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  td.num .sub{display:block;color:var(--muted);font-size:11px;}
+  td.best{background:#f0fdf4;font-weight:650;color:var(--good);}
+  tr:last-child td{border-bottom:none;}
+  .flag{color:var(--warn);font-size:11px;white-space:nowrap;font-weight:600;}
+  .star{color:#9333ea;font-weight:700;}
+  td.insample{color:var(--muted);background:#faf5ff;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--muted);}
+  .lg{display:inline-flex;align-items:center;gap:6px;}
+  .lg i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  svg .grid{stroke:var(--line);stroke-width:1;}
+  svg .axlab{fill:var(--muted);font-size:11px;}
+  ul.analysis{list-style:none;padding:0;margin:0;}
+  ul.analysis li{background:var(--card);border:1px solid var(--line);border-left:3px solid #2563eb;border-radius:8px;padding:12px 15px;margin-bottom:10px;}
+  ol.recs{padding-left:20px;} ol.recs li{margin-bottom:8px;}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:13px;}
+  .note{color:var(--muted);font-size:12.5px;margin-top:8px;}
+  .foot{color:var(--muted);font-size:12px;margin-top:40px;border-top:1px solid var(--line);padding-top:14px;}
+</style></head>
+<body><div class="wrap">
+
+<h1>Forecast Model Test — Walk-Forward Backtest</h1>
+<p class="sub-h">Beauty Square real sales · Dec 2025 → Jun 2026 · models trained month-by-month, each predicting the next month and checked against what actually sold. Includes the trained XGBoost layer.</p>
+
+<div class="verdict">The forecasting works — but the simple baseline is hard to beat. On a typical product the best model (<b>Python models</b>) misses by about <b>4.4 units/month</b>, slightly better than just averaging recent sales (7.7).</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="lab">Naïve average</div><div class="val">7.7</div><div class="ksub">MAE 12</div></div>
+  <div class="kpi"><div class="lab">Production (TS)</div><div class="val">7.8</div><div class="ksub">MAE 12</div></div>
+  <div class="kpi"><div class="lab">Python models</div><div class="val best">4.4</div><div class="ksub">MAE 195 · 2 blow-ups</div></div>
+  <div class="kpi"><div class="lab">Python + XGBoost</div><div class="val">12.0</div><div class="ksub">Apr→May only (out-of-sample)</div></div>
+</div>
+<p class="note">Big number = <b>typical miss</b> (median units off per product per month, <b>lower is better</b>). MAE = mean error (skewed by rare blow-ups). XGBoost shows its <b>out-of-sample</b> month only — its pooled number is inflated by training-month memorisation, so it's excluded from the headline race.</p>
+
+<h2>How each month scored</h2>
+<table>
+  <thead><tr><th>Train → predict</th><th class="num">Products</th><th class="num">Naïve</th><th class="num">Production (TS)</th><th class="num">Python models</th><th class="num">Python + XGBoost</th></tr></thead>
+  <tbody><tr><td>Jan → Feb</td><td class="num">13</td><td class="num">18.3<span class="sub">MAE 22 · 48%</span></td><td class="num best">9.9<span class="sub">MAE 11 · 38%</span></td><td class="num">17.5 <span class="flag">⚠1</span><span class="sub">MAE 4047 · 10387%</span></td><td class="num insample">11.6 <span class="star" title="In-sample: XGBoost trained on this month — not a fair test">★</span> <span class="flag">⚠1</span><span class="sub">MAE 4046 · 10383%</span></td></tr><tr><td>Feb → Mar</td><td class="num">57</td><td class="num">9.1<span class="sub">MAE 13 · 97%</span></td><td class="num">9.1<span class="sub">MAE 13 · 118%</span></td><td class="num best">8.2<span class="sub">MAE 12 · 72%</span></td><td class="num insample">8.0 <span class="star" title="In-sample: XGBoost trained on this month — not a fair test">★</span><span class="sub">MAE 11 · 71%</span></td></tr><tr><td>Mar → Apr</td><td class="num">100</td><td class="num">5.1<span class="sub">MAE 9 · 94%</span></td><td class="num">5.4<span class="sub">MAE 9 · 95%</span></td><td class="num best">4.1 <span class="flag">⚠1</span><span class="sub">MAE 43 · 142%</span></td><td class="num insample">4.0 <span class="star" title="In-sample: XGBoost trained on this month — not a fair test">★</span> <span class="flag">⚠1</span><span class="sub">MAE 43 · 142%</span></td></tr><tr><td>Apr → May <span class="flag">May thin</span></td><td class="num">128</td><td class="num">8.0<span class="sub">MAE 12 · 360%</span></td><td class="num">8.4<span class="sub">MAE 13 · 387%</span></td><td class="num best">2.9<span class="sub">MAE 5 · 151%</span></td><td class="num">12.0<span class="sub">MAE 14 · 483%</span></td></tr></tbody>
+</table>
+<p class="note">Each cell: <b>typical miss</b> (median), with <span style="color:var(--muted)">mean MAE · MAPE%</span> beneath. <span class="flag">⚠N</span> = N runaway forecasts that month. <span class="star">★</span> = in-sample for XGBoost (it trained on that month — <b>not a fair test, ignore</b>); only Apr→May is a real XGBoost test. Lowest typical miss per row is green.</p>
+
+<h2>Typical miss by month, side by side</h2>
+<div class="card">
+  <svg viewBox="0 0 760 280" width="100%" role="img" aria-label="Typical miss per month per model"><line x1="44" y1="226.0" x2="748" y2="226.0" class="grid"/><text x="38" y="229.0" text-anchor="end" class="axlab">0</text><line x1="44" y1="172.5" x2="748" y2="172.5" class="grid"/><text x="38" y="175.5" text-anchor="end" class="axlab">5</text><line x1="44" y1="119.0" x2="748" y2="119.0" class="grid"/><text x="38" y="122.0" text-anchor="end" class="axlab">9</text><line x1="44" y1="65.5" x2="748" y2="65.5" class="grid"/><text x="38" y="68.5" text-anchor="end" class="axlab">14</text><line x1="44" y1="12.0" x2="748" y2="12.0" class="grid"/><text x="38" y="15.0" text-anchor="end" class="axlab">18</text><rect x="52.0" y="12.0" width="34.0" height="214.0" fill="#9ca3af"><title>Jan → Feb — Naïve: typical miss 18.3</title></rect><rect x="89.0" y="109.6" width="34.0" height="116.4" fill="#2563eb"><title>Jan → Feb — Production (TS): typical miss 9.9</title></rect><rect x="126.0" y="20.9" width="34.0" height="205.1" fill="#16a34a"><title>Jan → Feb — Python models: typical miss 17.5</title></rect><text x="107.5" y="244" text-anchor="middle" class="axlab">Jan → Feb</text><rect x="228.0" y="118.9" width="34.0" height="107.1" fill="#9ca3af"><title>Feb → Mar — Naïve: typical miss 9.1</title></rect><rect x="265.0" y="118.9" width="34.0" height="107.1" fill="#2563eb"><title>Feb → Mar — Production (TS): typical miss 9.1</title></rect><rect x="302.0" y="130.2" width="34.0" height="95.8" fill="#16a34a"><title>Feb → Mar — Python models: typical miss 8.2</title></rect><text x="283.5" y="244" text-anchor="middle" class="axlab">Feb → Mar</text><rect x="404.0" y="166.3" width="34.0" height="59.7" fill="#9ca3af"><title>Mar → Apr — Naïve: typical miss 5.1</title></rect><rect x="441.0" y="162.2" width="34.0" height="63.8" fill="#2563eb"><title>Mar → Apr — Production (TS): typical miss 5.4</title></rect><rect x="478.0" y="178.0" width="34.0" height="48.0" fill="#16a34a"><title>Mar → Apr — Python models: typical miss 4.1</title></rect><text x="459.5" y="244" text-anchor="middle" class="axlab">Mar → Apr</text><rect x="580.0" y="132.8" width="34.0" height="93.2" fill="#9ca3af"><title>Apr → May — Naïve: typical miss 8.0</title></rect><rect x="617.0" y="127.8" width="34.0" height="98.2" fill="#2563eb"><title>Apr → May — Production (TS): typical miss 8.4</title></rect><rect x="654.0" y="191.8" width="34.0" height="34.2" fill="#16a34a"><title>Apr → May — Python models: typical miss 2.9</title></rect><text x="635.5" y="244" text-anchor="middle" class="axlab">Apr → May</text></svg>
+  <div class="legend"><span class="lg"><i style="background:#9ca3af"></i>Naïve</span><span class="lg"><i style="background:#2563eb"></i>Production (TS)</span><span class="lg"><i style="background:#16a34a"></i>Python models</span></div>
+</div>
+
+<h2>Which kind of product each model handled</h2>
+<p class="sub-h" style="margin-bottom:12px">Every product is auto-routed to one model by its sales pattern. Errors below are typical (median) miss across all months.</p>
+<table>
+  <thead><tr><th>Model bucket</th><th class="num">Products</th><th class="num">Python miss</th><th class="num">Production miss</th><th class="num">Blow-ups</th></tr></thead>
+  <tbody><tr><td>Croston/TSB (slow / lumpy)</td><td class="num">201</td><td class="num">3.1</td><td class="num">6.5</td><td class="num">0</td></tr><tr><td>SARIMA (steady sellers)</td><td class="num">97</td><td class="num">8.1</td><td class="num">12.4</td><td class="num"><span class="flag">2</span></td></tr></tbody>
+</table>
+
+<h2>What the data says</h2>
+<ul class="analysis"><li><b>Do the models beat a dumb baseline?</b> Slightly. The best model's typical miss (4.4 units) is 43% better than just averaging recent sales (7.7). Real, but not dramatic — which is exactly what ~5 months of history buys you.</li><li><b>The Python SARIMA model is unstable on short data.</b> 2 forecasts ran away to absurd numbers — the worst predicted <b>52358 units</b> for SKU 11346 that actually sold 39. SARIMA's trend+seasonal differencing extrapolates wildly when it has only a few weeks to fit. These rare blow-ups wreck the average error, which is why this report leads with the <i>median</i> (typical) miss instead. <b>Croston/TSB</b> (the slow-mover model, ~2/3 of the catalog) was stable throughout.</li><li><b>Production model vs Python models?</b> The Python models (typical miss 4.4) edge the production model (7.8) on typical accuracy, but only once you ignore their blow-ups. Not switch-ready until SARIMA is guarded.</li><li><b>Does XGBoost help?</b> No. On the only honest test — Apr→May, the one month it never trained on — it did not improve the typical miss (2.9 → 12.0). <b>Ignore its Jan/Feb/Mar numbers</b> (marked ★): the model trained on those months, so it just memorised them — that's why they look spectacular and the pooled figure is misleading. With only 4 monthly snapshots to learn from, XGBoost has nothing real to correct yet.</li><li><b>Is there enough data?</b> No — and this is the headline. History runs only Dec 2025 → Jun 2026, and May/June are thin (a sync gap). The early months (Jan→Feb) are weakest precisely because the models had ~6 weeks to learn from. The single highest-leverage fix is a <b>full year of sales</b> via the <code>read_all_orders</code> backfill — it lifts every model and is what SARIMA needs to stop misbehaving.</li></ul>
+
+<h2>Recommendations</h2>
+<ol class="recs"><li>For now, trust the forecast as a <b>guide, not gospel</b>: it's roughly baseline-good for steady & slow movers, but pair it with the owner's judgement on new and spiky SKUs.</li><li>Get the <b>full year of history</b> (<code>read_all_orders</code> backfill). Every model above is data-starved; this is the one change that helps all of them at once.</li><li><b>Guard SARIMA</b> before ever putting the Python models live — cap any forecast at, say, 3× the product's trailing best month so a divergence can't propose a 100,000-unit reorder.</li><li><b>Shelve XGBoost</b> until a year of data exists — on 4 monthly snapshots it overfits and adds no real accuracy.</li><li>Re-run this exact backtest each month as data accrues — it's now a one-command health check on the forecasting brain (<code>npx tsx scripts/walkforward-backtest.ts</code>).</li></ol>
+
+<div class="foot">
+  Generated by <code>scripts/walkforward-backtest.ts</code>. Read-only backtest — no database writes.
+  Caveats: no historical promo snapshots (calendar holiday/payday signals still applied); models output
+  30-day demand scaled to each month's length; measures <b>demand-forecast accuracy only</b>, not the
+  reorder / safety-stock math. "Typical miss" is the median absolute error; MAE is the mean.
+</div>
+
+</div></body></html>
