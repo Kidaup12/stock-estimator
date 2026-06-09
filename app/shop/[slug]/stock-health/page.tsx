@@ -22,9 +22,57 @@ const CLASS_BLURB: Record<Cls, string> = {
   C: "Slow / long-tail. Order sparingly.",
 };
 
-function leadLabel(r: PositionRow): string {
-  if (r.leadTimeAvgDays == null) return "—";
-  return r.leadTimeStdDays != null ? `${r.leadTimeAvgDays}±${r.leadTimeStdDays}d` : `${r.leadTimeAvgDays}d`;
+function LeadCell({ slug, productId, value, onSaved }: { slug: string; productId: string; value: number | null; onSaved: () => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [val, setVal] = useState(value == null ? "" : String(value));
+
+  async function save() {
+    setEditing(false);
+    const trimmed = val.trim();
+    const next = trimmed === "" ? null : Number.parseInt(trimmed, 10);
+    if ((next ?? null) === (value ?? null)) return; // no change
+    setBusy(true);
+    try {
+      const res = await apiFetch(slug, `/api/products/${productId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadTimeDays: trimmed === "" ? null : trimmed }),
+      });
+      if (!res.ok) { alert("Could not save lead time"); setVal(value == null ? "" : String(value)); return; }
+      await onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        min={1}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") { setVal(value == null ? "" : String(value)); setEditing(false); }
+        }}
+        className="w-16 text-right num text-sm border border-accent-500 rounded px-1.5 py-0.5 focus:outline-none"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => { setVal(value == null ? "" : String(value)); setEditing(true); }}
+      title="Click to edit lead time"
+      className="num text-mute hover:text-ink decoration-dotted underline underline-offset-2 decoration-line"
+    >
+      {busy ? "…" : value == null ? "— set" : `${value}d`}
+    </button>
+  );
 }
 
 export default function StockHealthPage() {
@@ -34,13 +82,16 @@ export default function StockHealthPage() {
   const [posWindow, setPosWindow] = useState(30);
   const [cls, setCls] = useState<Cls>("A");
 
-  useEffect(() => {
+  function loadPosition() {
     setLoading(true);
-    apiFetch(slug, `/api/inventory-position?window=${posWindow}`)
+    return apiFetch(slug, `/api/inventory-position?window=${posWindow}`)
       .then((r) => r.json())
       .then((d) => { setPosition(d); setLoading(false); })
       .catch(() => { setPosition(null); setLoading(false); });
-  }, [posWindow]);
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadPosition(); }, [posWindow]);
 
   const grp = position?.groups[cls];
 
@@ -63,7 +114,7 @@ export default function StockHealthPage() {
           <div>
             <div className="text-2xs uppercase tracking-wider text-mute">Inventory position</div>
             <h1 className="text-xl font-semibold tracking-tight mt-0.5">Stock health</h1>
-            <p className="text-2xs text-mute mt-1">How fast each product sells (run rate, units/day), what you hold now, and how many days of cover are left.</p>
+            <p className="text-2xs text-mute mt-1">How fast each product sells (run rate, units/day), what you hold now, and how many days of cover are left. Click any <span className="text-ink">Lead</span> value to set it per product.</p>
           </div>
           <div className="flex items-center gap-1">
             {[30, 60, 90].map((w) => (
@@ -155,7 +206,9 @@ export default function StockHealthPage() {
                           {r.onOrder}
                           {r.expectedArrivalAt ? ` (${new Date(r.expectedArrivalAt).toLocaleDateString("en-KE")})` : ""}
                         </td>
-                        <td className="px-5 py-2.5 text-right num text-mute">{leadLabel(r)}</td>
+                        <td className="px-5 py-2.5 text-right">
+                          <LeadCell slug={slug} productId={r.productId} value={r.leadTimeAvgDays} onSaved={loadPosition} />
+                        </td>
                         <td className={`px-5 py-2.5 text-right num ${atRisk ? "text-status-bad font-semibold" : ""}`}>
                           {r.daysOfCover == null ? "—" : Math.round(r.daysOfCover)}
                         </td>
