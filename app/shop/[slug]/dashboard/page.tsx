@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
@@ -40,6 +40,7 @@ type Prediction = {
   onOrder: number;
   expectedArrivalAt: string | null;
   leadTimeDays: number | null;
+  activeOrder: { id: string; orderedQty: number | null; orderedAt: string | null; expectedArrivalAt: string | null } | null;
   sales30Qty: number;
   sales30Revenue: number;
   sales90Qty: number;
@@ -72,7 +73,7 @@ const KESshort = (n: number) => {
   return n.toFixed(0);
 };
 
-type Tab = "reorder" | "stockout" | "dead" | "all";
+type Tab = "reorder" | "stockout" | "dead" | "all" | "onway";
 
 export default function Dashboard() {
   const { slug } = useParams<{ slug: string }>();
@@ -108,13 +109,14 @@ export default function Dashboard() {
     (p.product.vendor ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  // tab buckets
+  // tab buckets — items already marked "ordered" drop out of reorder/stockout (they're on the way).
   const stockout = filtered
-    .filter(p => p.product.currentStock <= 0 || p.daysUntilStockout < 3)
+    .filter(p => !p.activeOrder && (p.product.currentStock <= 0 || p.daysUntilStockout < 3))
     .sort((a, b) => a.daysUntilStockout - b.daysUntilStockout);
 
   const reorder = filtered
     .filter(p =>
+      !p.activeOrder &&
       p.recommendedQty > 0 &&
       p.product.currentStock > 0 &&
       p.daysUntilStockout >= 3 &&
@@ -126,9 +128,17 @@ export default function Dashboard() {
     .filter(p => p.sales90Qty === 0 && p.product.currentStock > 0)
     .sort((a, b) => b.stockValueKes - a.stockValueKes);
 
+  const onway = filtered
+    .filter(p => p.activeOrder)
+    .sort((a, b) => {
+      const ea = a.activeOrder?.expectedArrivalAt ? new Date(a.activeOrder.expectedArrivalAt).getTime() : Infinity;
+      const eb = b.activeOrder?.expectedArrivalAt ? new Date(b.activeOrder.expectedArrivalAt).getTime() : Infinity;
+      return ea - eb;
+    });
+
   const all = [...filtered].sort((a, b) => b.sales30Revenue - a.sales30Revenue);
 
-  const visible = tab === "reorder" ? reorder : tab === "stockout" ? stockout : tab === "dead" ? dead : all;
+  const visible = tab === "reorder" ? reorder : tab === "stockout" ? stockout : tab === "dead" ? dead : tab === "onway" ? onway : all;
 
   const reorderCostKes = reorder.reduce((s, p) => s + p.reorderCostKes, 0);
   const reorderRevenueKes = reorder.reduce((s, p) => s + p.reorderRevenueKes, 0);
@@ -136,7 +146,6 @@ export default function Dashboard() {
   const deadCostKes = summary?.deadStockKes ?? 0;
   const deadRetailKes = summary?.deadStockRetailKes ?? 0;
   const revenue30 = summary?.revenue30 ?? 0;
-  const grossMarginPct = summary?.grossMarginPct ?? 0;
 
   // Chart max for monthly bars
   const maxMonthlyRev = Math.max(1, ...monthly.map(m => m.revenueKes));
@@ -151,14 +160,13 @@ export default function Dashboard() {
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Live</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
+            <Link href={`/shop/${slug}/stock-health`} className="btn-ghost">Stock health</Link>
             <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
-            <Link href={`/shop/${slug}/purchase-orders`} className="btn-ghost">Purchase Orders</Link>
-            <Link href={`/shop/${slug}/promos`} className="btn-ghost">Promos</Link>
             <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
-            <Link href="/pricing" className="btn-ghost">Pricing</Link>
-            <Link href="/contact" className="btn-ghost">Contact</Link>
+            <Link href={`/shop/${slug}/purchase-orders`} className="btn-ghost">Purchase Orders</Link>
+            <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
             <Link href={`/shop/${slug}/settings`} className="btn-ghost">Settings</Link>
+            <NavMore slug={slug} />
             <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
               {busy ? "Running…" : "Re-run forecasts"}
             </button>
@@ -174,7 +182,7 @@ export default function Dashboard() {
 
         {/* KPI bar */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft mb-6">
-          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint={`${(grossMarginPct * 100).toFixed(0)}% gross margin`} />
+          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint="Last 30 days" />
           <Kpi label="Stockouts" value={stockout.length.toString()} hint="At or near zero" tone={stockout.length > 0 ? "alarm" : "default"} />
           <Kpi label="Reorders needed" value={reorder.length.toString()} hint={`KES ${KESshort(reorderCostKes)} to pay suppliers`} tone={reorder.length > 0 ? "warn" : "default"} />
           <Kpi label="Capital tied up in dead stock" value={`KES ${KESshort(deadCostKes)}`} hint={`${dead.length} SKUs · ${KESshort(deadRetailKes)} at retail`} tone={deadCostKes > 200000 ? "warn" : "default"} />
@@ -215,6 +223,7 @@ export default function Dashboard() {
           <div className="inline-flex rounded-xl border border-line bg-canvas-raised p-0.5 shadow-soft">
             <TabBtn active={tab === "reorder"} onClick={() => setTab("reorder")} label="Reorder" count={reorder.length} />
             <TabBtn active={tab === "stockout"} onClick={() => setTab("stockout")} label="Stockout" count={stockout.length} />
+            <TabBtn active={tab === "onway"} onClick={() => setTab("onway")} label="On the way" count={onway.length} />
             <TabBtn active={tab === "dead"} onClick={() => setTab("dead")} label="Dead stock" count={dead.length} />
             <TabBtn active={tab === "all"} onClick={() => setTab("all")} label="All" count={all.length} />
           </div>
@@ -254,7 +263,11 @@ export default function Dashboard() {
           )
         ) : tab === "reorder" || tab === "stockout" ? (
           <div className="grid gap-3">
-            {visible.map(p => <ReorderCard key={p.id} p={p} variant={tab === "stockout" ? "stockout" : "reorder"} />)}
+            {visible.map(p => <ReorderCard key={p.id} p={p} variant={tab === "stockout" ? "stockout" : "reorder"} onChanged={load} />)}
+          </div>
+        ) : tab === "onway" ? (
+          <div className="grid gap-3">
+            {visible.map(p => <OnTheWayCard key={p.id} p={p} onChanged={load} />)}
           </div>
         ) : tab === "dead" ? (
           <DeadStockTable predictions={visible} totalCostKes={deadCostKes} totalRetailKes={deadRetailKes} />
@@ -272,8 +285,34 @@ export default function Dashboard() {
             Reorder zone = 3–30 days of stock left. Pay suppliers KES {KESshort(reorderCostKes)}, expected sell-through revenue KES {KESshort(reorderRevenueKes)}.
           </div>
         )}
+        {tab === "onway" && onway.length > 0 && (
+          <div className="mt-4 text-2xs text-mute">
+            Items you marked as ordered. Hidden from Reorder until Shopify shows them received — or mark received here.
+          </div>
+        )}
       </div>
     </main>
+  );
+}
+
+function NavMore({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="btn-ghost" aria-haspopup="menu" aria-expanded={open}>
+        More ▾
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-1 z-30 w-44 card shadow-lift p-1 flex flex-col">
+            <Link href={`/shop/${slug}/promos`} className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Promos</Link>
+            <Link href="/pricing" className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Pricing</Link>
+            <Link href="/contact" className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Contact</Link>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -304,10 +343,25 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
   );
 }
 
-function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stockout" }) {
+function ReorderCard({ p, variant, onChanged }: { p: Prediction; variant: "reorder" | "stockout"; onChanged: () => void | Promise<void> }) {
   const { slug } = useParams<{ slug: string }>();
+  const [busy, setBusy] = useState(false);
   const isOut = variant === "stockout";
   const borderTone = isOut ? "border-status-bad/40 bg-red-50/40" : "border-status-warn/40 bg-amber-50/40";
+
+  async function markOrdered(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const res = await apiFetch(slug, `/api/products/${p.product.id}/order`, { method: "POST" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Could not mark as ordered"); return; }
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Link
       href={`/shop/${slug}/dashboard/product/${p.product.id}`}
@@ -349,18 +403,98 @@ function ReorderCard({ p, variant }: { p: Prediction; variant: "reorder" | "stoc
             />
           </div>
 
-          {p.signals.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {p.signals.map((s, i) => (
-                <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
-                  {s.emoji} {s.label}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+            {p.signals.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {p.signals.map((s, i) => (
+                  <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
+                    {s.emoji} {s.label}
+                  </span>
+                ))}
+              </div>
+            ) : <span />}
+            <button
+              onClick={markOrdered}
+              disabled={busy}
+              className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-ink-deep transition disabled:opacity-50 whitespace-nowrap"
+            >
+              {busy ? "Marking…" : "Mark as ordered"}
+            </button>
+          </div>
         </div>
       </div>
     </Link>
+  );
+}
+
+function OnTheWayCard({ p, onChanged }: { p: Prediction; onChanged: () => void | Promise<void> }) {
+  const { slug } = useParams<{ slug: string }>();
+  const [busy, setBusy] = useState(false);
+  const ao = p.activeOrder;
+  const eta = ao?.expectedArrivalAt ? new Date(ao.expectedArrivalAt) : null;
+  const orderedAt = ao?.orderedAt ? new Date(ao.orderedAt) : null;
+  const daysLeft = eta ? Math.ceil((eta.getTime() - Date.now()) / 86_400_000) : null;
+
+  async function act(path: string, e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      const res = await apiFetch(slug, path, { method: "POST" });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Action failed"); return; }
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card border border-status-ok/30 bg-green-50/30 block">
+      <div className="p-4 sm:p-5 flex gap-4">
+        {p.product.imageUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={p.product.imageUrl} alt={p.product.title} className="w-16 h-16 rounded-xl object-cover border border-line flex-shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link href={`/shop/${slug}/dashboard/product/${p.product.id}`} className="font-medium truncate hover:underline block">{p.product.title}</Link>
+              <div className="text-2xs text-mute mt-0.5 num">{p.product.sku} · {p.product.vendor || "—"}</div>
+            </div>
+            <span className="text-2xs uppercase font-semibold tracking-wider px-2 py-1 rounded-md bg-status-ok text-white">On the way</span>
+          </div>
+
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3 text-sm">
+            <Mini label="Ordered qty" value={(ao?.orderedQty ?? 0).toFixed(0)} tone="accent" />
+            <Mini label="Ordered" value={orderedAt ? orderedAt.toLocaleDateString("en-KE") : "—"} />
+            <Mini label="ETA" value={eta ? eta.toLocaleDateString("en-KE") : "—"} />
+            <Mini
+              label="Arrives in"
+              value={daysLeft == null ? "—" : daysLeft < 0 ? "overdue" : `${daysLeft}d`}
+              tone={daysLeft != null && daysLeft < 0 ? "bad" : "default"}
+            />
+            <Mini label="Stock now" value={p.product.currentStock.toFixed(0)} tone={p.product.currentStock <= 0 ? "bad" : undefined} />
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 justify-end">
+            <button
+              onClick={(e) => act(`/api/orders/${ao!.id}/unorder`, e)}
+              disabled={busy || !ao}
+              className="text-sm px-3 py-1.5 rounded-lg btn-ghost disabled:opacity-50 whitespace-nowrap"
+            >
+              Undo
+            </button>
+            <button
+              onClick={(e) => act(`/api/orders/${ao!.id}/received`, e)}
+              disabled={busy || !ao}
+              className="text-sm px-3 py-1.5 rounded-lg bg-status-ok text-white hover:opacity-90 transition disabled:opacity-50 whitespace-nowrap"
+            >
+              {busy ? "…" : "Mark received"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -452,7 +586,10 @@ function AllTable({ predictions }: { predictions: Prediction[] }) {
             {predictions.map(p => (
               <tr key={p.id} className="hover:bg-canvas">
                 <td className="px-5 py-3">
-                  <Link href={`/shop/${slug}/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/shop/${slug}/dashboard/product/${p.product.id}`} className="font-medium hover:underline">{p.product.title}</Link>
+                    {p.activeOrder && <span className="text-2xs px-1.5 py-0.5 rounded bg-status-ok/10 text-status-ok border border-status-ok/30 whitespace-nowrap">on the way</span>}
+                  </div>
                   <div className="text-2xs text-mute num">{p.product.sku}</div>
                 </td>
                 <td className="px-5 py-3 text-ink-soft">{p.product.vendor || "—"}</td>

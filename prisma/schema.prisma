@@ -191,11 +191,23 @@ model Order {
   createdAt           DateTime  @default(now())
   purchaseOrderId     String?
 
+  // Reorder tracking / memory (status "ordered" → "received"). Manual "Mark as ordered"
+  // records the intent; suppression rides on these fields, NOT Product.onOrder (the nightly
+  // Shopify reconcile authoritatively resets onOrder, which would wipe a manual bump).
+  productId         String?
+  orderedQty        Int?
+  orderedAt         DateTime?
+  expectedArrivalAt DateTime?
+  receivedAt        DateTime?
+  stockAtOrder      Float?
+  sawEnroute        Boolean   @default(false)
+
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   prediction    Prediction     @relation(fields: [predictionId], references: [id], onDelete: Cascade)
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, status])
+  @@index([tenantId, productId, status])
 }
 
 enum Role {

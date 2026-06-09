@@ -25,7 +25,7 @@ export async function GET() {
     select: { forecastRunId: true },
   });
 
-  const [predictions, sales30, sales90, sales365] = await Promise.all([
+  const [predictions, sales30, sales90, sales365, activeOrders] = await Promise.all([
     latestRun
       ? prisma.prediction.findMany({
           where: {
@@ -50,10 +50,18 @@ export async function GET() {
       where: { tenantId: tenant.id, date: { gte: last365Start } },
       select: { date: true, revenueKes: true, quantity: true },
     }),
+    // Active reorder markers (manual "Mark as ordered", not yet received).
+    prisma.order.findMany({
+      where: { tenantId: tenant.id, status: "ordered", receivedAt: null, productId: { not: null } },
+      select: { id: true, productId: true, orderedQty: true, orderedAt: true, expectedArrivalAt: true },
+    }),
   ]);
 
   const sales30Map = new Map(sales30.map(s => [s.productId, { qty: s._sum.quantity ?? 0, rev: s._sum.revenueKes ?? 0 }]));
   const sales90Map = new Map(sales90.map(s => [s.productId, { qty: s._sum.quantity ?? 0, rev: s._sum.revenueKes ?? 0 }]));
+  const activeOrderByProduct = new Map(
+    activeOrders.flatMap(o => (o.productId ? [[o.productId, o] as const] : []))
+  );
 
   const monthlyMap = new Map<string, { quantity: number; revenueKes: number }>();
   for (const s of sales365) {
@@ -109,9 +117,13 @@ export async function GET() {
     predictions: predictions.map(p => {
       const s30 = sales30Map.get(p.productId);
       const s90 = sales90Map.get(p.productId);
+      const ao = activeOrderByProduct.get(p.productId);
       return {
         id: p.id,
         productId: p.productId,
+        activeOrder: ao
+          ? { id: ao.id, orderedQty: ao.orderedQty, orderedAt: ao.orderedAt, expectedArrivalAt: ao.expectedArrivalAt }
+          : null,
         product: {
           id: p.product.id,
           sku: p.product.sku,

@@ -32,51 +32,47 @@ export async function GET() {
   const productById = new Map(products.map(p => [p.id, p]));
   const supplierById = new Map(suppliers.map(s => [s.id, s]));
 
-  // Monthly revenue, COGS & qty for last 13 months
-  const monthlyMap = new Map<string, { quantity: number; revenueKes: number; cogsKes: number }>();
+  // Monthly revenue & qty for last 13 months (revenue-only — gross profit dropped per Dave: cross-channel cost untrusted)
+  const monthlyMap = new Map<string, { quantity: number; revenueKes: number }>();
   for (const s of sales365) {
     const m = s.date.toISOString().slice(0, 7);
-    const e = monthlyMap.get(m) || { quantity: 0, revenueKes: 0, cogsKes: 0 };
+    const e = monthlyMap.get(m) || { quantity: 0, revenueKes: 0 };
     e.quantity += s.quantity;
     e.revenueKes += s.revenueKes;
-    const p = productById.get(s.productId);
-    if (p) e.cogsKes += s.quantity * p.costKes;
     monthlyMap.set(m, e);
   }
   const monthly = Array.from(monthlyMap.entries())
-    .map(([month, v]) => ({ month, ...v, grossProfitKes: v.revenueKes - v.cogsKes }))
+    .map(([month, v]) => ({ month, ...v }))
     .sort((a, b) => a.month.localeCompare(b.month));
 
-  // By category — revenue, COGS, gross profit (last 30d)
-  const byCategoryMap = new Map<string, { revenue: number; cogs: number; qty: number; count: number }>();
+  // By category — revenue only (last 30d)
+  const byCategoryMap = new Map<string, { revenue: number; qty: number; count: number }>();
   for (const p of products) {
     const cat = p.productType || "Uncategorised";
     const s = sales30Map.get(p.id);
-    const existing = byCategoryMap.get(cat) || { revenue: 0, cogs: 0, qty: 0, count: 0 };
+    const existing = byCategoryMap.get(cat) || { revenue: 0, qty: 0, count: 0 };
     existing.revenue += s?.rev ?? 0;
-    existing.cogs += (s?.qty ?? 0) * p.costKes;
     existing.qty += s?.qty ?? 0;
     existing.count += 1;
     byCategoryMap.set(cat, existing);
   }
   const byCategory = Array.from(byCategoryMap.entries())
-    .map(([name, v]) => ({ name, ...v, grossProfit: v.revenue - v.cogs, marginPct: v.revenue > 0 ? (v.revenue - v.cogs) / v.revenue : 0 }))
+    .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  // By brand
-  const byBrandMap = new Map<string, { revenue: number; cogs: number; qty: number; count: number }>();
+  // By brand — revenue only
+  const byBrandMap = new Map<string, { revenue: number; qty: number; count: number }>();
   for (const p of products) {
     const v = p.vendor || "Unbranded";
     const s = sales30Map.get(p.id);
-    const existing = byBrandMap.get(v) || { revenue: 0, cogs: 0, qty: 0, count: 0 };
+    const existing = byBrandMap.get(v) || { revenue: 0, qty: 0, count: 0 };
     existing.revenue += s?.rev ?? 0;
-    existing.cogs += (s?.qty ?? 0) * p.costKes;
     existing.qty += s?.qty ?? 0;
     existing.count += 1;
     byBrandMap.set(v, existing);
   }
   const byBrand = Array.from(byBrandMap.entries())
-    .map(([name, v]) => ({ name, ...v, grossProfit: v.revenue - v.cogs, marginPct: v.revenue > 0 ? (v.revenue - v.cogs) / v.revenue : 0 }))
+    .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 12);
 
@@ -144,10 +140,8 @@ export async function GET() {
     else abcCounts.C++;
   }
 
-  // Lost sales estimate: for critical-urgency predictions, units we'd miss if we let them stock out for the next 7 days.
-  // Surface both revenue at risk AND gross margin at risk (the real economic impact).
+  // Lost sales estimate: for critical-urgency predictions, revenue we'd miss if we let them stock out for the next 7 days.
   let lostRevenueKes = 0;
-  let lostMarginKes = 0;
   for (const pred of predictions) {
     if (pred.urgency !== "critical") continue;
     const p = productById.get(pred.productId);
@@ -156,7 +150,6 @@ export async function GET() {
     const daysLost = Math.max(0, 7 - pred.daysUntilStockout);
     const unitsAtRisk = dailyForecast * daysLost * 0.33; // discount: not every shopper walks
     lostRevenueKes += unitsAtRisk * p.priceKes;
-    lostMarginKes += unitsAtRisk * (p.priceKes - p.costKes);
   }
 
   // Totals at cost (capital tied up) and at retail (sell-through value)
@@ -172,7 +165,6 @@ export async function GET() {
     slowMovers,
     abcCounts,
     lostRevenueKes,
-    lostMarginKes,
     totalStockCost,
     totalStockRetail,
   });

@@ -21,6 +21,7 @@ import {
 import { applySalesForWindow } from "./sales-window";
 import { computeWindowStart } from "./reconcile-window";
 import { isSellableLocation, isEnrouteLocation } from "./locations";
+import { evaluateOrderArrival } from "./order-arrival";
 import { runForecastsForTenant } from "@/lib/forecast/run-batch";
 
 const OVERLAP_HOURS = 6;
@@ -149,6 +150,32 @@ export async function reconcileTenant(
       const onHand = level.quantities?.find((q) => q.name === "on_hand")?.quantity ?? 0;
       await upsertInventoryLevel(tenantId, locationId, productId, onHand);
       inventoryLevels++;
+    }
+  }
+
+  // ── Reorder-tracking auto-clear ──────────────────────────────────────────────
+  // Close active "ordered" markers when Shopify shows the goods landed: either the
+  // en-route bucket was seen then cleared, or ≥half the ordered qty hit the shelf.
+  const gidByLocalId = new Map(known.map((k) => [k.id, k.shopifyProductId]));
+  const activeOrders = await prisma.order.findMany({
+    where: { tenantId, status: "ordered", receivedAt: null, productId: { not: null } },
+    select: { id: true, productId: true, orderedQty: true, stockAtOrder: true, sawEnroute: true },
+  });
+  for (const o of activeOrders) {
+    const gid = o.productId ? gidByLocalId.get(o.productId) : undefined;
+    const newStock = gid ? (onHandByGid.get(gid) ?? 0) : 0;
+    const newEnroute = gid ? Math.round(enrouteByGid.get(gid) ?? 0) : 0;
+    const { sawEnroute, received } = evaluateOrderArrival({
+      sawEnroute: o.sawEnroute,
+      newEnroute,
+      newStock,
+      stockAtOrder: o.stockAtOrder ?? 0,
+      orderedQty: o.orderedQty ?? 0,
+    });
+    if (received) {
+      await prisma.order.update({ where: { id: o.id }, data: { status: "received", receivedAt: runStart, sawEnroute } });
+    } else if (sawEnroute !== o.sawEnroute) {
+      await prisma.order.update({ where: { id: o.id }, data: { sawEnroute } });
     }
   }
 

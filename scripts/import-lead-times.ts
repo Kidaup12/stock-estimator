@@ -12,7 +12,7 @@ import fs from "node:fs";
 import { prisma } from "../lib/prisma";
 
 const DEFAULT_FILE =
-  "C:\\Users\\ROY\\Downloads\\MAY STOCK TAKE INVENTORY REPORT - FINAL_STOCK_DATA_CLEANED - MAY 31ST 7PM.csv";
+  "C:\\Users\\ROY\\Downloads\\MAY STOCK TAKE INVENTORY REPORT - OLD_STOCK_DATA_AS OF MAY 31ST 7PM.csv";
 
 /** Split a CSV line, honoring double-quoted fields that contain commas. */
 function splitCsvLine(line: string): string[] {
