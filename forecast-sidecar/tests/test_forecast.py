@@ -293,8 +293,22 @@ class TestLayer2Multiplier:
 # ---------------------------------------------------------------------------
 
 class TestXgbHook:
-    def test_xgb_adjust_returns_1_0_when_no_model(self):
-        """The _xgb_adjust hook must return 1.0 when no model is loaded."""
-        from app.forecast import _xgb_adjust
-        features = {"cv": 0.3, "abc": "A", "recent_rate": 2.5}
-        assert _xgb_adjust(features) == pytest.approx(1.0)
+    def test_xgb_adjust_returns_1_0_when_no_model(self, monkeypatch):
+        """The _xgb_adjust hook must return 1.0 when no model is loaded (backward-compatible)."""
+        import app.forecast as fc
+        monkeypatch.setattr(fc, "_XGB_BUNDLE", False)  # force the no-model path
+        features = {"confidence": 0.7, "abc": "A", "recent_rate": 2.5, "regime": "sarima", "layer1": 50.0}
+        assert fc._xgb_adjust(features) == pytest.approx(1.0)
+
+    def test_xgb_adjust_returns_clipped_float_when_model_present(self, monkeypatch):
+        """With a (fake) model loaded, returns a finite multiplier within the clip range."""
+        import app.forecast as fc
+
+        class _FakeModel:
+            def predict(self, x):
+                return [99.0]  # absurd — must be clipped to the upper bound
+
+        monkeypatch.setattr(fc, "_XGB_BUNDLE", {"model": _FakeModel(), "clip": [0.2, 5.0]})
+        features = {"confidence": 0.7, "abc": "A", "recent_rate": 2.5, "regime": "sarima", "layer1": 50.0}
+        out = fc._xgb_adjust(features)
+        assert out == pytest.approx(5.0)

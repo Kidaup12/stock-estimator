@@ -55,3 +55,8 @@ fc.json
 
 # GSD execution caches (transient — never push upstream)
 .planning/_*
+
+# Forecast sidecar trained model artifact
+forecast-sidecar/model.pkl
+scripts/out/
+docs/superpowers/*.pdf

@@ -35,16 +35,70 @@ from app.calendar_ke import (
 # XGBoost hook (no-op until backtest training in Task C2)
 # ---------------------------------------------------------------------------
 
+import os
+
+# Lazy-loaded XGBoost residual model. _XGB_BUNDLE is:
+#   None      -> not yet attempted
+#   False     -> attempted, no model present (stay a no-op)
+#   dict      -> loaded {model, feature_names, clip}
+_XGB_BUNDLE: Any = None
+_MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "model.pkl")
+
+
+def _load_xgb() -> Any:
+    global _XGB_BUNDLE
+    if _XGB_BUNDLE is None:
+        try:
+            import joblib  # noqa: WPS433 (lazy import)
+            _XGB_BUNDLE = joblib.load(_MODEL_PATH) if os.path.exists(_MODEL_PATH) else False
+        except Exception:
+            _XGB_BUNDLE = False
+    return _XGB_BUNDLE
+
+
+def _xgb_feature_vector(features: dict[str, Any]) -> list[float]:
+    """MUST match build_features() in train_xgb.py exactly."""
+    import numpy as np
+
+    conf = float(features.get("confidence", 0.5))
+    cv = (1.0 - conf) / 0.3 if conf < 0.9 else 0.0
+    abc = str(features.get("abc") or "C").upper()
+    abc_ord = {"A": 0.0, "B": 1.0, "C": 2.0}.get(abc, 2.0)
+    recent = float(features.get("recent_rate", 0.0) or 0.0)
+    layer1 = float(features.get("layer1", 0.0) or 0.0)
+    regime = str(features.get("regime", "")).lower()
+    return [
+        cv,
+        abc_ord,
+        float(np.log1p(max(0.0, recent))),
+        float(np.log1p(max(0.0, layer1))),
+        1.0 if regime == "sarima" else 0.0,
+        1.0 if regime in ("tsb", "croston") else 0.0,
+        1.0 if regime == "cold_start" else 0.0,
+    ]
+
+
 def _xgb_adjust(features: dict[str, Any]) -> float:
     """
-    Placeholder XGBoost residual-correction multiplier.
+    XGBoost residual-correction multiplier.
 
-    Returns 1.0 (no adjustment) when no trained model is present.
-    Task C2 will train a pooled XGBRegressor and store it as model.pkl;
-    at that point this function will load the model and return a real
-    adjustment factor.  The caller multiplies layer2_mult by this value.
+    Returns 1.0 (no adjustment) when no trained model is present, so the sidecar
+    is fully backward-compatible. When forecast-sidecar/model.pkl exists (built by
+    train_xgb.py), loads it once and returns the clipped predicted multiplier.
+    The caller multiplies the calendar multiplier by this value.
     """
-    return 1.0
+    bundle = _load_xgb()
+    if not bundle:
+        return 1.0
+    try:
+        import numpy as np
+
+        x = np.array([_xgb_feature_vector(features)], dtype=float)
+        pred = float(bundle["model"].predict(x)[0])
+        lo, hi = bundle.get("clip", [0.2, 5.0])
+        return min(hi, max(lo, pred))
+    except Exception:
+        return 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -220,11 +274,13 @@ def forecast_demand(req: DemandRequest) -> DemandResponse:
     hol_mult = hol_boost
     total_mult = hol_mult * pay_mult * promo_lift
 
-    # XGBoost hook (returns 1.0 until Task C2)
+    # XGBoost residual hook (returns 1.0 unless model.pkl is present).
     xgb_features = {
-        "cv": (1 - layer1_confidence) / 0.3 if layer1_confidence < 0.9 else 0.0,
+        "confidence": layer1_confidence,
         "abc": req.abcCategory,
         "recent_rate": weighted_rate(series, asof=today),
+        "regime": regime_label,
+        "layer1": layer1,
     }
     xgb_mult = _xgb_adjust(xgb_features)
     total_mult *= xgb_mult
