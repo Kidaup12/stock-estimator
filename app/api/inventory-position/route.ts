@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { buildPositionView, type PositionRowInput, type Abc } from "@/lib/inventory/position";
 import { utcDayKey } from "@/lib/inventory/snapshot";
+import { leadDaysFor } from "@/lib/forecast/category";
 
 export async function GET(req: NextRequest) {
   const ctx = await requireTenantOrResponse();
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
       where: { tenantId },
       select: {
         id: true, title: true, sku: true, abcCategory: true, currentStock: true,
-        onOrder: true, expectedArrivalAt: true, leadTimeDays: true,
+        onOrder: true, expectedArrivalAt: true, leadTimeDays: true, importCategory: true,
         supplier: { select: { leadTimeAvgDays: true, leadTimeStdDays: true } },
       },
     }),
@@ -60,9 +61,9 @@ export async function GET(req: NextRequest) {
     currentStock: p.currentStock,
     onOrder: p.onOrder,
     expectedArrivalAt: p.expectedArrivalAt,
-    // Lead time precedence mirrors the forecast: per-product override → supplier avg → 30d default.
+    // Lead time precedence mirrors the forecast: product override → supplier avg → category default → 30.
     // Per-product lead has no std, so show a bare number (std null) instead of the supplier's "30±7".
-    leadTimeAvgDays: p.leadTimeDays ?? p.supplier?.leadTimeAvgDays ?? 30,
+    leadTimeAvgDays: leadDaysFor(p, p.supplier),
     leadTimeStdDays: p.leadTimeDays != null ? null : (p.supplier?.leadTimeStdDays ?? null),
     soldInWindow: soldByProduct.get(p.id) ?? 0,
     snapshotOnHand: openingByProduct.get(p.id) ?? null,
