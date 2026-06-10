@@ -163,7 +163,6 @@ export default function Dashboard() {
             <Link href={`/shop/${slug}/stock-health`} className="btn-ghost">Stock health</Link>
             <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
             <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
-            <Link href={`/shop/${slug}/purchase-orders`} className="btn-ghost">Purchase Orders</Link>
             <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
             <Link href={`/shop/${slug}/settings`} className="btn-ghost">Settings</Link>
             <NavMore slug={slug} />
@@ -430,10 +429,12 @@ function ReorderCard({ p, variant, onChanged }: { p: Prediction; variant: "reord
 function OnTheWayCard({ p, onChanged }: { p: Prediction; onChanged: () => void | Promise<void> }) {
   const { slug } = useParams<{ slug: string }>();
   const [busy, setBusy] = useState(false);
+  // Captured once per mount so render stays pure (cards remount on every data reload).
+  const [now] = useState(() => Date.now());
   const ao = p.activeOrder;
   const eta = ao?.expectedArrivalAt ? new Date(ao.expectedArrivalAt) : null;
   const orderedAt = ao?.orderedAt ? new Date(ao.orderedAt) : null;
-  const daysLeft = eta ? Math.ceil((eta.getTime() - Date.now()) / 86_400_000) : null;
+  const daysLeft = eta ? Math.ceil((eta.getTime() - now) / 86_400_000) : null;
 
   async function act(path: string, e: MouseEvent) {
     e.preventDefault();

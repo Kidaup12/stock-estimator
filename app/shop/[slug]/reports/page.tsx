@@ -86,96 +86,7 @@ export default function ReportsPage() {
           <Kpi label="ABC mix" value={`${data.abcCounts.A} · ${data.abcCounts.B} · ${data.abcCounts.C}`} hint={`A SKUs drive 70% of revenue`} />
         </div>
 
-        {/* Monthly revenue */}
-        <section className="card p-5">
-          <div className="flex items-end justify-between mb-4">
-            <div>
-              <div className="text-2xs uppercase tracking-wider text-mute">12 months</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue</h2>
-            </div>
-            <div className="text-2xs text-mute">KES</div>
-          </div>
-          <div className="flex items-end gap-1.5 h-40">
-            {data.monthly.slice(-12).map(m => {
-              const h = (m.revenueKes / maxMonthRev) * 100;
-              return (
-                <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
-                  <div className="text-[10px] text-mute num">{KESshort(m.revenueKes)}</div>
-                  <div className="flex-1 w-full flex items-end">
-                    <div className="w-full rounded-t bg-accent-500 group-hover:bg-accent-600 transition" style={{ height: `${h}%` }} />
-                  </div>
-                  <div className="text-[10px] text-mute num">{m.month.slice(5)}</div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Category + brand grid */}
-        <div className="grid lg:grid-cols-2 gap-4">
-          <section className="card p-5">
-            <div className="mb-4">
-              <div className="text-2xs uppercase tracking-wider text-mute">Last 30 days</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue by category</h2>
-            </div>
-            <div className="space-y-2">
-              {data.byCategory.slice(0, 10).map((c, i) => (
-                <BarRow
-                  key={c.name}
-                  label={c.name}
-                  pct={(c.revenue / maxCategoryRev) * 100}
-                  value={`KES ${KESshort(c.revenue)}`}
-                  hint={`${c.count} SKUs`}
-                  color={PALETTE[i % PALETTE.length]}
-                />
-              ))}
-            </div>
-          </section>
-
-          <section className="card p-5">
-            <div className="mb-4">
-              <div className="text-2xs uppercase tracking-wider text-mute">Last 30 days · top 12</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue by brand</h2>
-            </div>
-            <div className="space-y-2">
-              {data.byBrand.map((b, i) => (
-                <BarRow
-                  key={b.name}
-                  label={b.name}
-                  pct={(b.revenue / maxBrandRev) * 100}
-                  value={`KES ${KESshort(b.revenue)}`}
-                  hint={`${b.count} SKUs`}
-                  color={PALETTE[i % PALETTE.length]}
-                />
-              ))}
-            </div>
-          </section>
-        </div>
-
-        {/* Suppliers exposure */}
-        <section className="card p-5">
-          <div className="mb-4 flex items-end justify-between">
-            <div>
-              <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up by origin (at cost)</div>
-              <h2 className="text-base font-semibold tracking-tight mt-0.5">Supplier exposure</h2>
-            </div>
-            <div className="text-2xs text-mute">Sum at cost: <span className="num text-ink-soft">KES {KESshort(totalSupplierExposure)}</span></div>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-            {data.bySupplier.map((s, i) => (
-              <BarRow
-                key={s.name}
-                label={`${s.name}`}
-                pct={(s.stockCost / Math.max(1, totalSupplierExposure)) * 100}
-                value={`KES ${KESshort(s.stockCost)}`}
-                hint={`${s.count} SKUs · ${s.country || "—"} · lead ${s.leadAvg}d`}
-                color={PALETTE[i % PALETTE.length]}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Top movers + slow movers */}
+        {/* Top movers + slow movers — the order-decision content leads the page */}
         <div className="grid lg:grid-cols-2 gap-4">
           <section className="card overflow-hidden">
             <div className="px-5 pt-5 pb-4">
@@ -225,6 +136,105 @@ export default function ReportsPage() {
             </table>
           </section>
         </div>
+
+        {/* Monthly revenue */}
+        <section className="card p-5">
+          <div className="flex items-end justify-between mb-4">
+            <div>
+              <div className="text-2xs uppercase tracking-wider text-mute">12 months</div>
+              <h2 className="text-base font-semibold tracking-tight mt-0.5">Revenue</h2>
+            </div>
+            <div className="text-2xs text-mute">KES</div>
+          </div>
+          <div className="flex items-end gap-1.5 h-40">
+            {data.monthly.slice(-12).map(m => {
+              const h = (m.revenueKes / maxMonthRev) * 100;
+              return (
+                <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
+                  <div className="text-[10px] text-mute num">{KESshort(m.revenueKes)}</div>
+                  <div className="flex-1 w-full flex items-end">
+                    <div className="w-full rounded-t bg-accent-500 group-hover:bg-accent-600 transition" style={{ height: `${h}%` }} />
+                  </div>
+                  <div className="text-[10px] text-mute num">{m.month.slice(5)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Revenue breakdowns — secondary analytics, collapsed by default */}
+        <details className="card overflow-hidden group">
+          <summary className="px-5 py-4 cursor-pointer select-none flex items-center justify-between hover:bg-canvas transition list-none [&::-webkit-details-marker]:hidden">
+            <div>
+              <h2 className="text-base font-semibold tracking-tight">Revenue breakdowns</h2>
+              <p className="text-2xs text-mute mt-0.5">By category, brand and supplier exposure — open when you need them</p>
+            </div>
+            <span className="text-mute text-sm transition-transform group-open:rotate-180">▾</span>
+          </summary>
+          <div className="px-5 pb-5 space-y-6 border-t border-line pt-5">
+            <div className="grid lg:grid-cols-2 gap-6">
+              <div>
+                <div className="mb-4">
+                  <div className="text-2xs uppercase tracking-wider text-mute">Last 30 days</div>
+                  <h3 className="text-base font-semibold tracking-tight mt-0.5">Revenue by category</h3>
+                </div>
+                <div className="space-y-2">
+                  {data.byCategory.slice(0, 10).map((c, i) => (
+                    <BarRow
+                      key={c.name}
+                      label={c.name}
+                      pct={(c.revenue / maxCategoryRev) * 100}
+                      value={`KES ${KESshort(c.revenue)}`}
+                      hint={`${c.count} SKUs`}
+                      color={PALETTE[i % PALETTE.length]}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-4">
+                  <div className="text-2xs uppercase tracking-wider text-mute">Last 30 days · top 12</div>
+                  <h3 className="text-base font-semibold tracking-tight mt-0.5">Revenue by brand</h3>
+                </div>
+                <div className="space-y-2">
+                  {data.byBrand.map((b, i) => (
+                    <BarRow
+                      key={b.name}
+                      label={b.name}
+                      pct={(b.revenue / maxBrandRev) * 100}
+                      value={`KES ${KESshort(b.revenue)}`}
+                      hint={`${b.count} SKUs`}
+                      color={PALETTE[i % PALETTE.length]}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-4 flex items-end justify-between">
+                <div>
+                  <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up by origin (at cost)</div>
+                  <h3 className="text-base font-semibold tracking-tight mt-0.5">Supplier exposure</h3>
+                </div>
+                <div className="text-2xs text-mute">Sum at cost: <span className="num text-ink-soft">KES {KESshort(totalSupplierExposure)}</span></div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
+                {data.bySupplier.map((s, i) => (
+                  <BarRow
+                    key={s.name}
+                    label={`${s.name}`}
+                    pct={(s.stockCost / Math.max(1, totalSupplierExposure)) * 100}
+                    value={`KES ${KESshort(s.stockCost)}`}
+                    hint={`${s.count} SKUs · ${s.country || "—"} · lead ${s.leadAvg}d`}
+                    color={PALETTE[i % PALETTE.length]}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
     </main>
   );
