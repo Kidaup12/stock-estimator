@@ -231,7 +231,11 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="text-center py-16 text-mute text-sm">Loading…</div>
+          <div className="space-y-3 py-4">
+            <div className="skeleton h-24" />
+            <div className="skeleton h-40" />
+            <div className="skeleton h-40" />
+          </div>
         ) : visible.length === 0 ? (
           predictions.length === 0 ? (
             <div className="card text-center py-14 px-6">

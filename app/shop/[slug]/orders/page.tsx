@@ -56,7 +56,11 @@ export default function OrdersPage() {
             <span className="text-2xs text-mute">{active.length} order{active.length === 1 ? "" : "s"}</span>
           </div>
           {loading ? (
-            <div className="px-5 pb-6 text-sm text-mute">Loading…</div>
+            <div className="px-5 pb-5 space-y-2">
+              <div className="skeleton h-9" />
+              <div className="skeleton h-9" />
+              <div className="skeleton h-9" />
+            </div>
           ) : active.length === 0 ? (
             <div className="px-5 pb-6 text-sm text-mute">
               Nothing on the way. Mark items as ordered from the <Link href={`/shop/${slug}/dashboard`} className="text-accent-700 hover:underline">dashboard</Link> or the <Link href={`/shop/${slug}/restock-planner`} className="text-accent-700 hover:underline">Restock Planner</Link>.
@@ -90,7 +94,11 @@ export default function OrdersPage() {
             <span className="text-2xs text-mute">last {history.length}</span>
           </div>
           {loading ? (
-            <div className="px-5 pb-6 text-sm text-mute">Loading…</div>
+            <div className="px-5 pb-5 space-y-2">
+              <div className="skeleton h-9" />
+              <div className="skeleton h-9" />
+              <div className="skeleton h-9" />
+            </div>
           ) : history.length === 0 ? (
             <div className="px-5 pb-6 text-sm text-mute">No received orders yet — when you mark an active order as received it lands here.</div>
           ) : (

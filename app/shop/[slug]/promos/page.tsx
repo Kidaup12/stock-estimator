@@ -81,26 +81,18 @@ export default function PromosPage() {
       <div className="max-w-5xl mx-auto px-5 sm:px-8 py-7">
         <div className="flex items-end justify-between mb-7 gap-3 flex-wrap">
           <div>
-            <div className="text-2xs uppercase tracking-wider text-mute">Demand signals</div>
-            <h1 className="text-xl font-semibold tracking-tight mt-0.5">Promo calendar</h1>
+            <div className="page-eyebrow">Demand signals</div>
+            <h1 className="page-title">Promo calendar</h1>
+            <p className="page-sub">Promos scheduled here lift the forecast for their dates — typical Kenya rhythm: payday-week drops on the 25th–30th, V-Day fragrance, Jamhuri sitewide.</p>
           </div>
           <button onClick={() => setEditing({ ...emptyForm })} className="btn-accent">
-            + Add promo
+            Add promo
           </button>
         </div>
 
-        <p className="text-sm text-ink-soft leading-relaxed mb-6 max-w-2xl">
-          Active promos feed the Layer-2 forecast. Common Kenya patterns:
-          payday-week WhatsApp drops (25–30 each month, 15%),
-          V-Day fragrance push, Jamhuri sitewide.
-        </p>
-
         {editing && (
           <div className="card p-6 mb-6">
-            <div className="mb-4">
-              <div className="text-2xs uppercase tracking-wider text-mute">{editing.id ? "Editing" : "New record"}</div>
-              <h2 className="text-base font-semibold tracking-tight mt-1">{editing.id ? "Edit promo" : "New promo"}</h2>
-            </div>
+            <h2 className="text-base font-semibold tracking-tight mb-4">{editing.id ? "Edit promo" : "New promo"}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <DateField label="Start date" value={editing.startDate} onChange={v => setEditing({ ...editing, startDate: v })} />
               <DateField label="End date" value={editing.endDate} onChange={v => setEditing({ ...editing, endDate: v })} />

@@ -222,7 +222,10 @@ export default function ProductsPage() {
         )}
 
         {loading ? (
-          <div className="text-center py-16 text-mute text-sm">Loading…</div>
+          <div className="space-y-3 py-4">
+            <div className="skeleton h-10 max-w-md" />
+            <div className="skeleton h-72" />
+          </div>
         ) : visibleRows.length === 0 ? (
           <div className="card text-center py-14 text-mute text-sm">{q ? `No products match “${query}”.` : `No products in Class ${cls}.`}</div>
         ) : (
