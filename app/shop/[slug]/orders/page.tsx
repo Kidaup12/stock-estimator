@@ -122,16 +122,17 @@ export default function OrdersPage() {
                     : null;
                   const late = took != null && expected != null && took > expected;
                   return (
-                    <tr key={o.id} className="hover:bg-canvas">
+                    <tr key={o.id} className="hover:bg-canvas group">
                       <td className="px-5 py-2.5"><ProductCell o={o} slug={slug} /></td>
                       <td className="px-3 py-2.5 text-right num">{o.orderedQty ?? "—"}</td>
                       <td className="px-3 py-2.5 text-right num">{fmtDate(o.orderedAt)}</td>
                       <td className="px-3 py-2.5 text-right num">{fmtDate(o.receivedAt)}</td>
-                      <td className="px-5 py-2.5 text-right num">
+                      <td className="px-5 py-2.5 text-right num whitespace-nowrap">
                         {took != null ? `${took}d` : "—"}
                         {expected != null && (
                           <span className={`ml-1 text-2xs ${late ? "text-status-warn" : "text-mute"}`}>vs {expected}d est</span>
                         )}
+                        <HistoryReverse orderId={o.id} slug={slug} onChanged={load} />
                       </td>
                     </tr>
                   );
@@ -160,6 +161,31 @@ function ProductCell({ o, slug }: { o: OrderRow; slug: string }) {
         {o.product?.sku ?? "—"} · {o.product?.vendor ?? "—"}{cat ? ` · ${cat}` : ""}
       </div>
     </div>
+  );
+}
+
+/** Undo a mistaken "Mark received" — back to on-the-way. */
+function HistoryReverse({ orderId, slug, onChanged }: { orderId: string; slug: string; onChanged: () => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  async function reverse(e: MouseEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const res = await apiFetch(slug, `/api/orders/${orderId}/unreceive`, { method: "POST" });
+      if (res.ok) await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      onClick={reverse}
+      disabled={busy}
+      title="Mistake? Put this back on the way"
+      className="ml-2 text-2xs text-mute opacity-0 group-hover:opacity-100 hover:text-status-warn transition disabled:opacity-50"
+    >
+      {busy ? "…" : "Reverse"}
+    </button>
   );
 }
 

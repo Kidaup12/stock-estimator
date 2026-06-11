@@ -84,6 +84,9 @@ export default function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<Tab>("reorder");
+  // Multi-select for bulk "Mark as ordered" on the reorder/stockout tables.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -109,14 +112,17 @@ export default function Dashboard() {
     (p.product.vendor ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  // tab buckets — items already marked "ordered" drop out of reorder/stockout (they're on the way).
+  // tab buckets — items already marked "ordered" drop out of reorder/stockout (they're on
+  // the way), and a product with NO run rate is never an emergency: zero sales + zero
+  // stock is a dead listing, not a stockout (Dave, 2026-06-11).
   const stockout = filtered
-    .filter(p => !p.activeOrder && (p.product.currentStock <= 0 || p.daysUntilStockout < 3))
+    .filter(p => !p.activeOrder && p.runRate > 0 && (p.product.currentStock <= 0 || p.daysUntilStockout < 3))
     .sort((a, b) => a.daysUntilStockout - b.daysUntilStockout);
 
   const reorder = filtered
     .filter(p =>
       !p.activeOrder &&
+      p.runRate > 0 &&
       p.recommendedQty > 0 &&
       p.product.currentStock > 0 &&
       p.daysUntilStockout >= 3 &&
@@ -279,9 +285,29 @@ export default function Dashboard() {
             <div className="text-center py-14 text-mute text-sm">Nothing in this tab.</div>
           )
         ) : tab === "reorder" || tab === "stockout" ? (
-          <div className="grid gap-3">
-            {visible.map(p => <ReorderCard key={p.id} p={p} variant={tab === "stockout" ? "stockout" : "reorder"} onChanged={load} />)}
-          </div>
+          <ReorderTable
+            rows={visible}
+            variant={tab === "stockout" ? "stockout" : "reorder"}
+            slug={slug}
+            sel={sel}
+            setSel={setSel}
+            bulkBusy={bulkBusy}
+            onBulkOrder={async (items) => {
+              setBulkBusy(true);
+              try {
+                const res = await apiFetch(slug, "/api/orders/bulk", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    items: items.map(p => ({ productId: p.productId, qty: Math.max(1, Math.ceil(p.recommendedQty)) })),
+                  }),
+                });
+                if (res.ok) { setSel(new Set()); await load(); }
+              } finally {
+                setBulkBusy(false);
+              }
+            }}
+          />
         ) : tab === "onway" ? (
           <div className="grid gap-3">
             {visible.map(p => <OnTheWayCard key={p.id} p={p} onChanged={load} />)}
@@ -326,87 +352,124 @@ function TabBtn({ active, onClick, label, count }: { active: boolean; onClick: (
   );
 }
 
-function ReorderCard({ p, variant, onChanged }: { p: Prediction; variant: "reorder" | "stockout"; onChanged: () => void | Promise<void> }) {
-  const { slug } = useParams<{ slug: string }>();
-  const [busy, setBusy] = useState(false);
+/**
+ * Compact multi-select reorder/stockout table (Dave, 2026-06-11): no images,
+ * dense rows — see everything without scrolling — tick items, one bulk
+ * "Mark N as ordered" action.
+ */
+function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder }: {
+  rows: Prediction[];
+  variant: "reorder" | "stockout";
+  slug: string;
+  sel: Set<string>;
+  setSel: (s: Set<string>) => void;
+  bulkBusy: boolean;
+  onBulkOrder: (items: Prediction[]) => Promise<void>;
+}) {
   const isOut = variant === "stockout";
-  const borderTone = isOut ? "border-status-bad/40 bg-red-50/40" : "border-status-warn/40 bg-amber-50/40";
+  const checked = rows.filter(p => sel.has(p.productId));
+  const checkedCost = checked.reduce((s, p) => s + p.reorderCostKes, 0);
+  const allChecked = rows.length > 0 && checked.length === rows.length;
 
-  async function markOrdered(e: MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    setBusy(true);
-    try {
-      const res = await apiFetch(slug, `/api/products/${p.product.id}/order`, { method: "POST" });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || "Could not mark as ordered"); return; }
-      await onChanged();
-    } finally {
-      setBusy(false);
-    }
+  function toggle(id: string) {
+    const next = new Set(sel);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSel(next);
+  }
+  function toggleAll() {
+    setSel(allChecked ? new Set() : new Set(rows.map(p => p.productId)));
   }
 
   return (
-    <Link
-      href={`/shop/${slug}/dashboard/product/${p.product.id}`}
-      className={`card hover:shadow-lift transition border ${borderTone} block`}
-    >
-      <div className="p-4 sm:p-5 flex gap-4">
-        {p.product.imageUrl && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={p.product.imageUrl} alt={p.product.title} className="w-16 h-16 rounded-xl object-cover border border-line flex-shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-medium truncate">{p.product.title}</div>
-              <div className="text-2xs text-mute mt-0.5 num">{p.product.sku} · {p.product.vendor || "—"} · {p.product.productType || "—"}</div>
-            </div>
-            <span className={`text-2xs uppercase font-semibold tracking-wider px-2 py-1 rounded-md ${
-              isOut ? "bg-status-bad text-white" : "bg-status-warn text-white"
-            }`}>
-              {isOut ? "Stockout" : p.urgency}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mt-3 text-sm">
-            <Mini label="Stock" value={p.product.currentStock.toFixed(0)} tone={p.product.currentStock <= 0 ? "bad" : undefined} />
-            <Mini label="Run/day" value={p.runRate.toFixed(2)} sub="sales/day" />
-            <Mini label="Days left" value={`${p.daysUntilStockout}d`} tone={p.daysUntilStockout < 7 ? "bad" : "default"} />
-            <Mini
-              label="En route"
-              value={p.onOrder.toFixed(0)}
-              sub={p.product.expectedArrivalAt ? `ETA ${new Date(p.product.expectedArrivalAt).toLocaleDateString("en-KE")}` : undefined}
-            />
-            <Mini label="30d forecast" value={p.finalForecast30d.toFixed(0)} />
-            <Mini
-              label="Reorder qty"
-              value={`${p.recommendedQty.toFixed(0)}`}
-              sub={`net of en-route · cost KES ${KESshort(p.reorderCostKes)}`}
-              tone="accent"
-            />
-          </div>
-
-          <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-            {p.signals.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {p.signals.map((s, i) => (
-                  <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
-                    {s.emoji} {s.label}
-                  </span>
-                ))}
-              </div>
-            ) : <span />}
+    <div className="space-y-3">
+      {checked.length > 0 && (
+        <div className="sticky top-2 z-10 p-3 rounded-2xl border border-accent-200 bg-accent-50 shadow-soft flex items-center gap-3 flex-wrap">
+          <span className="text-sm text-ink-soft">
+            <span className="num font-semibold">{checked.length}</span> selected · KES <span className="num font-semibold">{KESshort(checkedCost)}</span> to suppliers
+          </span>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => setSel(new Set())} className="btn-ghost text-sm">Clear</button>
             <button
-              onClick={markOrdered}
-              disabled={busy}
-              className="text-sm px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-ink-deep transition disabled:opacity-50 whitespace-nowrap"
+              onClick={() => onBulkOrder(checked)}
+              disabled={bulkBusy}
+              className="btn-accent disabled:bg-mute disabled:hover:bg-mute"
             >
-              {busy ? "Marking…" : "Mark as ordered"}
+              {bulkBusy ? "Marking…" : `Mark ${checked.length} as ordered`}
             </button>
           </div>
         </div>
+      )}
+
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-2xs uppercase tracking-wider text-mute bg-canvas">
+              <tr>
+                <th className="pl-4 pr-2 py-2.5 w-8">
+                  <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Select all" className="accent-[#6d5cd6] h-4 w-4 align-middle" />
+                </th>
+                <th className="px-3 py-2.5 font-medium">Product</th>
+                <th className="px-3 py-2.5 font-medium text-right">Stock</th>
+                <th className="px-3 py-2.5 font-medium text-right">Run/day</th>
+                <th className="px-3 py-2.5 font-medium text-right">Days left</th>
+                <th className="px-3 py-2.5 font-medium text-right">En route</th>
+                <th className="px-3 py-2.5 font-medium text-right">Order qty</th>
+                <th className="px-5 py-2.5 font-medium text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map(p => {
+                const isSel = sel.has(p.productId);
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => toggle(p.productId)}
+                    className={`cursor-pointer transition-colors ${isSel ? "bg-accent-50/60" : "hover:bg-canvas"}`}
+                  >
+                    <td className="pl-4 pr-2 py-2">
+                      <input
+                        type="checkbox"
+                        checked={isSel}
+                        onChange={() => toggle(p.productId)}
+                        onClick={e => e.stopPropagation()}
+                        aria-label={`Select ${p.product.title}`}
+                        className="accent-[#6d5cd6] h-4 w-4 align-middle"
+                      />
+                    </td>
+                    <td className="px-3 py-2 max-w-[320px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link
+                          href={`/shop/${slug}/dashboard/product/${p.product.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="font-medium truncate hover:underline"
+                        >
+                          {p.product.title}
+                        </Link>
+                        <span className={`shrink-0 ${isOut ? "badge-bad" : p.urgency === "high" ? "badge-warn" : "badge-mute"}`}>
+                          {isOut ? "out" : p.urgency}
+                        </span>
+                      </div>
+                      <div className="text-2xs text-mute num">{p.product.sku} · {p.product.vendor || "—"}</div>
+                    </td>
+                    <td className={`px-3 py-2 text-right num ${p.product.currentStock <= 0 ? "text-status-bad font-semibold" : ""}`}>
+                      {p.product.currentStock.toFixed(0)}
+                    </td>
+                    <td className="px-3 py-2 text-right num">{p.runRate.toFixed(2)}</td>
+                    <td className={`px-3 py-2 text-right num ${p.daysUntilStockout < 7 ? "text-status-bad font-semibold" : ""}`}>
+                      {p.daysUntilStockout}d
+                    </td>
+                    <td className="px-3 py-2 text-right num text-mute">{p.onOrder > 0 ? p.onOrder.toFixed(0) : "—"}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-accent-700">{p.recommendedQty.toFixed(0)}</td>
+                    <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </Link>
+    </div>
   );
 }
 

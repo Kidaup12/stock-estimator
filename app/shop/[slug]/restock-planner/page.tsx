@@ -97,8 +97,9 @@ export default function RestockPlannerPage() {
   const { slug } = useParams<{ slug: string }>();
   const [facets, setFacets] = useState<{ categories: Facet[]; brands: Facet[] }>({ categories: [], brands: [] });
 
-  // Budget allocator state
+  // Budget allocator state — budget caps the spend, days sizes the need; either or both.
   const [budgetInput, setBudgetInput] = useState<string>("800000");
+  const [daysInput, setDaysInput] = useState<string>("");
   const [budgetResult, setBudgetResult] = useState<BudgetResult | null>(null);
   const [runningBudget, setRunningBudget] = useState(false);
   // Row selection for the bulk actions (productIds; default = every "Buy now" row).
@@ -122,10 +123,12 @@ export default function RestockPlannerPage() {
   async function runBudget() {
     setRunningBudget(true);
     setOrderedMsg(null);
+    const budgetKes = budgetInput.trim() === "" ? undefined : parseFloat(budgetInput);
+    const coverDays = daysInput.trim() === "" ? undefined : parseInt(daysInput, 10);
     const res = await apiFetch(slug, "/api/simulate/budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ budgetKes: parseFloat(budgetInput) }),
+      body: JSON.stringify({ budgetKes, coverDays }),
     });
     const data: BudgetResult = await res.json();
     setBudgetResult(data);
@@ -245,12 +248,12 @@ export default function RestockPlannerPage() {
 
           <div className="flex flex-wrap items-end gap-3">
             <label className="block">
-              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Budget (KES)</span>
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Budget (KES) — optional</span>
               <input
                 type="number"
                 value={budgetInput}
                 onChange={e => setBudgetInput(e.target.value)}
-                className="input"
+                className="input w-40"
                 placeholder="800000"
               />
             </label>
@@ -265,14 +268,40 @@ export default function RestockPlannerPage() {
                 </button>
               ))}
             </div>
+            <label className="block">
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Cover the next… — optional</span>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={daysInput}
+                  onChange={e => setDaysInput(e.target.value)}
+                  className="input w-24"
+                  placeholder="days"
+                />
+                {[5, 7, 14, 21].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDaysInput(String(d))}
+                    className="text-2xs px-2.5 py-1.5 rounded-md bg-canvas-tint border border-line text-ink-soft hover:bg-canvas"
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
+            </label>
             <button
               onClick={runBudget}
-              disabled={runningBudget || !budgetInput}
+              disabled={runningBudget || (!budgetInput.trim() && !daysInput.trim())}
               className="btn-accent disabled:bg-mute disabled:hover:bg-mute"
             >
-              {runningBudget ? "Running…" : "Run allocation"}
+              {runningBudget ? "Running…" : "Plan my restock"}
             </button>
           </div>
+          <p className="text-2xs text-mute mt-2.5">
+            Days sizes the order (&ldquo;enough stock for N days&rdquo;); budget caps the spend. Use either, or both together.
+          </p>
 
           {budgetResult && (
             <div className="mt-6 space-y-4">

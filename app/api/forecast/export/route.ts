@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { latestForecastRunId } from "@/lib/forecast/latest-run";
 
 /** CSV-escape a value (quote + double internal quotes). */
 function csv(v: string | number | null | undefined): string {
@@ -24,16 +25,12 @@ export async function GET(req: NextRequest) {
   const last30Start = new Date(today);
   last30Start.setUTCDate(last30Start.getUTCDate() - 30);
 
-  const latestRun = await prisma.prediction.findFirst({
-    where: { tenantId: tenant.id },
-    orderBy: { runDate: "desc" },
-    select: { forecastRunId: true },
-  });
+  const runId = await latestForecastRunId(tenant.id);
 
   const [predictions, sales30] = await Promise.all([
-    latestRun
+    runId
       ? prisma.prediction.findMany({
-          where: { tenantId: tenant.id, forecastRunId: latestRun.forecastRunId },
+          where: { tenantId: tenant.id, forecastRunId: runId },
           include: { product: true },
           orderBy: { daysUntilStockout: "asc" },
         })

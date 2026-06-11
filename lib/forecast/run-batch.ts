@@ -5,6 +5,7 @@
  * Prediction -> create pending Order for critical/high). Also snapshots inventory.
  */
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   simulateLayeredForecast,
   type ActivePromo,
@@ -100,7 +101,13 @@ export async function runForecastsForTenant(
     }
   }
 
-  let created = 0;
+  // Compute everything in memory, then write in BATCHES. The old per-product
+  // create loop (~3 round-trips × 2,000 products) blew past Vercel's
+  // maxDuration and left truncated runs behind — the source of the partial
+  // 61/111-prediction "phantom" runs.
+  const abcBuckets: Record<string, string[]> = { A: [], B: [], C: [] };
+  const predRows: Prisma.PredictionCreateManyInput[] = [];
+
   for (let i = 0; i < products.length; i++) {
     const p = products[i];
     const input = inputs[i];
@@ -120,38 +127,63 @@ export async function runForecastsForTenant(
       coverDays: coverDaysFor(p),
     });
 
-    await prisma.product.update({ where: { id: p.id }, data: { abcCategory: abc } });
-
-    const prediction = await prisma.prediction.create({
-      data: {
-        tenantId,
-        productId: p.id,
-        runDate: todayUtc,
-        layer1Forecast30d: result.layer1Forecast30d,
-        layer1Confidence: result.layer1Confidence,
-        layer2Adjustment: result.layer2Adjustment,
-        finalForecast30d: result.finalForecast30d,
-        daysUntilStockout: result.daysUntilStockout,
-        recommendedQty: adjustedRecommendedQty,
-        safetyStock: result.safetyStock,
-        reorderPoint: result.reorderPoint,
-        confidence: result.confidence,
-        reasoning: result.reasoning,
-        urgency: result.urgency,
-        signals: JSON.stringify(result.signals),
-        forecastRunId,
-        regime: demands && demands[i] ? (demands[i].regime ?? null) : null,
-      },
+    (abcBuckets[abc] ?? abcBuckets.C).push(p.id);
+    predRows.push({
+      tenantId,
+      productId: p.id,
+      runDate: todayUtc,
+      layer1Forecast30d: result.layer1Forecast30d,
+      layer1Confidence: result.layer1Confidence,
+      layer2Adjustment: result.layer2Adjustment,
+      finalForecast30d: result.finalForecast30d,
+      daysUntilStockout: result.daysUntilStockout,
+      recommendedQty: adjustedRecommendedQty,
+      safetyStock: result.safetyStock,
+      reorderPoint: result.reorderPoint,
+      confidence: result.confidence,
+      reasoning: result.reasoning,
+      urgency: result.urgency,
+      signals: JSON.stringify(result.signals),
+      forecastRunId,
+      regime: demands && demands[i] ? (demands[i].regime ?? null) : null,
     });
-
-    if (adjustedRecommendedQty > 0 && (result.urgency === "critical" || result.urgency === "high")) {
-      await prisma.order.create({
-        data: { tenantId, predictionId: prediction.id, status: "pending" },
-      });
-    }
-    created++;
   }
 
+  // 3 updateMany (ABC) + 1 createMany (predictions) + 1 createMany (orders).
+  for (const [abc, ids] of Object.entries(abcBuckets)) {
+    if (ids.length > 0) {
+      await prisma.product.updateMany({ where: { tenantId, id: { in: ids } }, data: { abcCategory: abc } });
+    }
+  }
+  await prisma.prediction.createMany({ data: predRows });
+
+  const needOrders = await prisma.prediction.findMany({
+    where: {
+      tenantId,
+      forecastRunId,
+      recommendedQty: { gt: 0 },
+      urgency: { in: ["critical", "high"] },
+    },
+    select: { id: true },
+  });
+  if (needOrders.length > 0) {
+    await prisma.order.createMany({
+      data: needOrders.map((pr) => ({ tenantId, predictionId: pr.id, status: "pending" })),
+    });
+  }
+
+  // Retention: with several runs per day, prune predictions older than 30 days.
+  // Keep any prediction an Order still points at (received/ordered history), and
+  // drop stale auto-created pending orders first so their predictions can go.
+  const cutoff = new Date(todayUtc);
+  cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+  await prisma.order.deleteMany({
+    where: { tenantId, status: "pending", prediction: { runDate: { lt: cutoff } } },
+  });
+  await prisma.prediction.deleteMany({
+    where: { tenantId, runDate: { lt: cutoff }, orders: { none: {} } },
+  });
+
   await snapshotInventory(tenantId);
-  return { created, forecastRunId };
+  return { created: predRows.length, forecastRunId };
 }

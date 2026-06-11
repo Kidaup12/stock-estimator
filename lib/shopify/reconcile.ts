@@ -86,7 +86,10 @@ function sumOnHandByType(locations: ShopifyLocationNode[]): {
 export async function reconcileTenant(
   tenantId: string,
   /** Tenant IANA timezone — defaults to the schema default. Pass from the caller. */
-  timezone = "Africa/Nairobi"
+  timezone = "Africa/Nairobi",
+  /** skipForecast: hourly sync mode — refresh products/stock/sales from Shopify
+   *  but leave predictions alone (the heavier re-forecast runs on its own cadence). */
+  opts: { skipForecast?: boolean } = {}
 ): Promise<ReconcileResult> {
   const connection = await prisma.shopifyConnection.findUnique({ where: { tenantId } });
   if (!connection || connection.uninstalledAt) {
@@ -189,8 +192,11 @@ export async function reconcileTenant(
   const salesRows = await applySalesForWindow(tenantId, orders, productIdByGid);
   await setCursor(tenantId, "orders", runStart);
 
-  // ── Snapshot + re-forecast ──────────────────────────────────────────────────
-  const { created: forecastsCreated } = await runForecastsForTenant(tenantId, timezone);
+  // ── Snapshot + re-forecast (skipped in hourly sync-only mode) ───────────────
+  let forecastsCreated = 0;
+  if (!opts.skipForecast) {
+    ({ created: forecastsCreated } = await runForecastsForTenant(tenantId, timezone));
+  }
 
   return {
     windowStart: productsSince.toISOString(),

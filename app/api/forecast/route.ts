@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { latestForecastRunId } from "@/lib/forecast/latest-run";
 
 export async function GET() {
   const auth = await requireTenantOrResponse();
@@ -16,21 +17,17 @@ export async function GET() {
   const last365Start = new Date(today);
   last365Start.setUTCFullYear(today.getUTCFullYear() - 1);
 
-  // Pin dashboard to the latest forecastRunId per tenant (codex REVIEWS #3).
-  // Using max(runDate) per product can interleave rows across batches; the
-  // forecastRunId batch pin guarantees one consistent run.
-  const latestRun = await prisma.prediction.findFirst({
-    where: { tenantId: tenant.id },
-    orderBy: { runDate: "desc" },
-    select: { forecastRunId: true },
-  });
+  // Pin the dashboard to ONE deterministic run: latest day, most complete run
+  // (lib/forecast/latest-run.ts). Same-day partial/duplicate runs no longer flip
+  // the numbers between page loads.
+  const runId = await latestForecastRunId(tenant.id);
 
   const [predictions, sales30, sales90, sales365, activeOrders] = await Promise.all([
-    latestRun
+    runId
       ? prisma.prediction.findMany({
           where: {
             tenantId: tenant.id,
-            forecastRunId: latestRun.forecastRunId,
+            forecastRunId: runId,
           },
           include: { product: true },
           orderBy: { daysUntilStockout: "asc" },
