@@ -80,6 +80,7 @@ export default function Dashboard() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [summary, setSummary] = useState<Summary>(null);
   const [monthly, setMonthly] = useState<MonthlyRow[]>([]);
+  const [shopName, setShopName] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
@@ -90,11 +91,15 @@ export default function Dashboard() {
 
   async function load() {
     setLoading(true);
-    const res = await apiFetch(slug, "/api/forecast");
+    const [res, shop] = await Promise.all([
+      apiFetch(slug, "/api/forecast"),
+      apiFetch(slug, "/api/shop").then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
     const data = await res.json();
     setPredictions(data.predictions || []);
     setSummary(data.summary || null);
     setMonthly(data.monthlyRevenue || []);
+    setShopName(shop?.name ?? "");
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -161,7 +166,7 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-7">
         <div className="mb-7 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="page-eyebrow">Beauty Square KE</div>
+            <div className="page-eyebrow">{shopName || " "}</div>
             <h1 className="page-title">Today&apos;s replenishment view</h1>
           </div>
           <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
@@ -274,13 +279,7 @@ export default function Dashboard() {
           </div>
         ) : visible.length === 0 ? (
           predictions.length === 0 ? (
-            <div className="card text-center py-14 px-6">
-              <div className="text-2xs uppercase tracking-wider text-mute">No forecasts yet</div>
-              <p className="text-ink-soft mt-3 mb-6 max-w-md mx-auto text-sm leading-relaxed">
-                Connect a shop and seed your catalogue from Settings.
-              </p>
-              <Link href={`/shop/${slug}/settings`} className="btn-accent inline-flex">Go to Settings</Link>
-            </div>
+            <SetupChecklist slug={slug} onRun={rerun} busy={busy} />
           ) : (
             <div className="text-center py-14 text-mute text-sm">Nothing in this tab.</div>
           )
@@ -335,6 +334,108 @@ export default function Dashboard() {
         )}
       </div>
     </main>
+  );
+}
+
+type ShopStatusLite = {
+  products: { total: number; withCost: number };
+  suppliers: { count: number };
+  shopify: { connected: boolean };
+};
+
+/**
+ * Empty-state guide shown when a tenant has no forecasts yet. Reads live per-shop
+ * status and walks the owner through the few things that unlock recommendations —
+ * connect Shopify, sync the catalogue, add costs + suppliers, then run the forecast.
+ * Generic across tenants; nothing is hardcoded.
+ */
+function SetupChecklist({ slug, onRun, busy }: { slug: string; onRun: () => void; busy: boolean }) {
+  const [s, setS] = useState<ShopStatusLite | null>(null);
+
+  useEffect(() => {
+    apiFetch(slug, "/api/shop/status")
+      .then(r => (r.ok ? r.json() : null))
+      .then(setS)
+      .catch(() => setS(null));
+  }, [slug]);
+
+  const total = s?.products.total ?? 0;
+  const withCost = s?.products.withCost ?? 0;
+  const steps = [
+    {
+      done: !!s?.shopify.connected,
+      label: "Connect Shopify",
+      detail: s?.shopify.connected ? "connected" : "syncs sales & stock automatically",
+      href: `/shop/${slug}/settings`,
+    },
+    {
+      done: total > 0,
+      label: "Sync your catalogue",
+      detail: total > 0 ? `${total} products` : "seed your products from Settings",
+      href: `/shop/${slug}/settings`,
+    },
+    {
+      done: total > 0 && withCost === total,
+      label: "Add cost prices",
+      detail: total === 0 ? "needed for the buy math" : `${withCost} / ${total} priced — the rest are excluded`,
+      href: `/shop/${slug}/products`,
+    },
+    {
+      done: (s?.suppliers.count ?? 0) > 0,
+      label: "Add suppliers",
+      detail: (s?.suppliers.count ?? 0) > 0 ? `${s?.suppliers.count} set` : "lead times + MOQ per supplier",
+      href: `/shop/${slug}/suppliers`,
+    },
+  ];
+  const readyToRun = total > 0 && withCost > 0;
+  const doneCount = steps.filter(st => st.done).length;
+
+  return (
+    <div className="card max-w-2xl mx-auto p-7">
+      <div className="text-2xs uppercase tracking-wider text-mute">Finish setup to get recommendations</div>
+      <h2 className="text-lg font-semibold tracking-tight mt-1">A few steps and your buy list is live</h2>
+      <p className="text-sm text-ink-soft mt-1.5 leading-relaxed">
+        {doneCount} of {steps.length} done. New here? See{" "}
+        <Link href={`/shop/${slug}/getting-started`} className="text-accent-700 hover:underline">how it works</Link>.
+      </p>
+
+      <ol className="mt-5 divide-y divide-line border border-line rounded-xl overflow-hidden">
+        {steps.map((st, i) => (
+          <li key={i} className="flex items-center gap-3 px-4 py-3 bg-canvas-raised">
+            <span
+              className={`shrink-0 h-5 w-5 rounded-full flex items-center justify-center ${
+                st.done ? "bg-status-ok text-white" : "border border-line text-mute"
+              }`}
+            >
+              {st.done ? (
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 6.5 5 9l4.5-5" /></svg>
+              ) : (
+                <span className="text-2xs num">{i + 1}</span>
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-sm font-medium ${st.done ? "text-mute line-through" : ""}`}>{st.label}</div>
+              <div className="text-2xs text-mute">{st.detail}</div>
+            </div>
+            {!st.done && (
+              <Link href={st.href} className="shrink-0 text-2xs font-medium text-accent-700 hover:underline">Set up →</Link>
+            )}
+          </li>
+        ))}
+      </ol>
+
+      <div className="mt-5 flex gap-2 flex-wrap">
+        <button
+          onClick={onRun}
+          disabled={busy || !readyToRun}
+          className="btn-accent disabled:bg-mute disabled:hover:bg-mute"
+          title={readyToRun ? "" : "Add products and at least one cost price first"}
+        >
+          {busy ? "Running…" : "Generate forecasts"}
+        </button>
+        <Link href={`/shop/${slug}/settings`} className="btn-ghost">Open Settings</Link>
+      </div>
+    </div>
   );
 }
 

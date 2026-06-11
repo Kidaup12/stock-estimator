@@ -79,6 +79,7 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
     { href: `${base}/reports`, label: "Reports", icon: <IconChart /> },
   ];
   const setup = [
+    { href: `${base}/getting-started`, label: "How it works", icon: <IconHelp /> },
     { href: `${base}/suppliers`, label: "Suppliers", icon: <IconGlobe /> },
     { href: `${base}/promos`, label: "Promo calendar", icon: <IconTag /> },
     { href: `${base}/settings`, label: "Settings", icon: <IconGear /> },
@@ -166,4 +167,7 @@ function IconGear() {
 }
 function IconSignOut() {
   return <svg {...ic}><path d="M6 2h-2.5A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14H6M10.5 11 14 8l-3.5-3M14 8H6" /></svg>;
+}
+function IconHelp() {
+  return <svg {...ic}><circle cx="8" cy="8" r="6.2" /><path d="M6.2 6.2a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.8.6-.8 1.1v.4" /><circle cx="8" cy="11.6" r="0.55" fill="currentColor" stroke="none" /></svg>;
 }

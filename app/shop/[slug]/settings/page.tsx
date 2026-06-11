@@ -16,9 +16,11 @@ type ShopInfo = {
 export default function SettingsPage() {
   const { slug } = useParams<{ slug: string }>();
   const [shop, setShop] = useState<ShopInfo>(null);
+  // Start empty — multi-tenant: never seed one shop's identity as the default.
+  // load() fills these from GET /api/shop for the resolved tenant.
   const [form, setForm] = useState({
-    name: "Beauty Square KE",
-    shopifyDomain: "beautysquareke.co",
+    name: "",
+    shopifyDomain: "",
     shopifyAccessToken: "",
   });
   const [loading, setLoading] = useState(true);
@@ -99,14 +101,18 @@ export default function SettingsPage() {
           <h1 className="text-xl font-semibold tracking-tight mt-0.5">Settings</h1>
         </div>
 
-        <div className="card p-5 mb-4 bg-accent-50 border-accent-100">
-          <div className="text-2xs uppercase tracking-wider text-accent-700 font-semibold">What you input vs. what&apos;s automatic</div>
-          <ul className="text-sm text-ink-soft mt-3 space-y-1.5 leading-relaxed">
-            <li>· <strong>Automatic:</strong> daily catalogue + sales sync from Shopify, nightly forecast refresh.</li>
-            <li>· <strong>You input occasionally:</strong> <Link href={`/shop/${slug}/suppliers`} className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href={`/shop/${slug}/promos`} className="text-accent-700 hover:underline">promo calendar</Link>, product lead times + import category on the Products page.</li>
-            <li>· <strong>One-time:</strong> Shopify connection + initial catalogue seed below.</li>
-          </ul>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <p className="text-sm text-mute">
+            New here? See{" "}
+            <Link href={`/shop/${slug}/getting-started`} className="text-accent-700 hover:underline">
+              how Wezesha works
+            </Link>
+            .
+          </p>
         </div>
+
+        <StatusGrid slug={slug} />
+
 
         <div className="space-y-4">
           <Section
@@ -161,6 +167,163 @@ export default function SettingsPage() {
         {loading && <div className="text-center text-mute text-sm mt-6">Loading…</div>}
       </div>
     </main>
+  );
+}
+
+type ShopStatus = {
+  products: { total: number; withCost: number; mapped: number; withPrediction: number };
+  suppliers: { count: number; withMoq: number };
+  members: { count: number };
+  shopify: { connected: boolean; lastSyncAt: string | null };
+  quickbooks: { connected: boolean };
+  forecast: { lastRunAt: string | null };
+};
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "never";
+  const then = new Date(iso).getTime();
+  const mins = Math.round((Date.now() - then) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
+
+/**
+ * Live setup-readiness boxes. Everything is derived per-tenant from GET
+ * /api/shop/status — a fresh shop shows empty/grey boxes, a configured one shows
+ * its real coverage. No shop is special-cased.
+ */
+function StatusGrid({ slug }: { slug: string }) {
+  const [s, setS] = useState<ShopStatus | null>(null);
+
+  useEffect(() => {
+    apiFetch(slug, "/api/shop/status")
+      .then(r => (r.ok ? r.json() : null))
+      .then(setS)
+      .catch(() => setS(null));
+  }, [slug]);
+
+  const total = s?.products.total ?? 0;
+  const missingCost = total - (s?.products.withCost ?? 0);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+      <StatusBox
+        label="Shopify"
+        state={!s ? "loading" : s.shopify.connected ? "ok" : "empty"}
+        value={!s ? "…" : s.shopify.connected ? "Connected" : "Not connected"}
+        detail={
+          !s
+            ? ""
+            : s.shopify.connected
+              ? `synced ${relativeTime(s.shopify.lastSyncAt)}`
+              : "connect below to sync sales & stock"
+        }
+      />
+
+      <StatusBox
+        label="QuickBooks"
+        state={!s ? "loading" : s.quickbooks.connected ? "ok" : "empty"}
+        value={!s ? "…" : s.quickbooks.connected ? "Connected" : "Not connected"}
+        detail={!s ? "" : s.quickbooks.connected ? "cost & orders syncing" : "pulls cost prices & past orders"}
+      />
+
+      <StatusBox
+        label="Cost coverage"
+        href={`/shop/${slug}/products`}
+        action="Review"
+        state={!s ? "loading" : total === 0 ? "empty" : missingCost === 0 ? "ok" : "warn"}
+        value={!s ? "…" : total === 0 ? "—" : `${s.products.withCost} / ${total}`}
+        detail={
+          !s
+            ? ""
+            : total === 0
+              ? "no products yet"
+              : missingCost === 0
+                ? "every product has a cost"
+                : `${missingCost} missing a cost — excluded from recommendations`
+        }
+      />
+
+      <StatusBox
+        label="Suppliers & mapping"
+        href={`/shop/${slug}/suppliers`}
+        action="Manage"
+        state={!s ? "loading" : s.suppliers.count === 0 ? "empty" : s.products.mapped < total ? "warn" : "ok"}
+        value={!s ? "…" : `${s.suppliers.count} supplier${s.suppliers.count === 1 ? "" : "s"}`}
+        detail={
+          !s
+            ? ""
+            : s.suppliers.count === 0
+              ? "add suppliers + lead times"
+              : `${s.products.mapped} / ${total} products mapped`
+        }
+      />
+
+      <StatusBox
+        label="Pack size / MOQ"
+        href={`/shop/${slug}/suppliers`}
+        action="Add"
+        state={!s ? "loading" : s.suppliers.count === 0 ? "empty" : s.suppliers.withMoq === 0 ? "warn" : "ok"}
+        value={!s ? "…" : s.suppliers.count === 0 ? "—" : `${s.suppliers.withMoq} / ${s.suppliers.count}`}
+        detail={!s ? "" : s.suppliers.count === 0 ? "set per supplier" : "suppliers with an MOQ set"}
+      />
+
+      <StatusBox
+        label="Recommendations"
+        href={`/shop/${slug}/dashboard`}
+        action="View"
+        state={!s ? "loading" : s.products.withPrediction === 0 ? "empty" : "ok"}
+        value={!s ? "…" : s.products.withPrediction === 0 ? "Not yet" : `${s.products.withPrediction} products`}
+        detail={
+          !s
+            ? ""
+            : s.forecast.lastRunAt
+              ? `last run ${relativeTime(s.forecast.lastRunAt)}`
+              : "run a forecast below"
+        }
+      />
+    </div>
+  );
+}
+
+type BoxState = "ok" | "warn" | "empty" | "loading";
+
+function StatusBox({
+  label,
+  value,
+  detail,
+  state,
+  href,
+  action,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  state: BoxState;
+  href?: string;
+  action?: string;
+}) {
+  const dot =
+    state === "ok" ? "bg-status-ok" : state === "warn" ? "bg-status-warn" : "bg-mute/40";
+  const muted = state === "empty" || state === "loading";
+  return (
+    <div className={`card p-4 ${muted ? "opacity-70" : ""}`}>
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+        <span className="text-2xs uppercase tracking-wider text-mute">{label}</span>
+      </div>
+      <div className="mt-2 text-base font-semibold tracking-tight num">{value}</div>
+      {detail && <div className={`text-xs mt-1 leading-snug ${state === "warn" ? "text-status-warn" : "text-mute"}`}>{detail}</div>}
+      {href && action && state !== "loading" && (
+        <Link href={href} className="inline-block mt-2.5 text-2xs font-medium text-accent-700 hover:underline">
+          {action} →
+        </Link>
+      )}
+    </div>
   );
 }
 
