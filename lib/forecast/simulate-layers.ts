@@ -184,11 +184,22 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
   const cv = meanRecent > 0 ? std90 / meanRecent : 1.0;
   const layer1Confidence = Math.max(0.3, Math.min(0.95, 0.9 - cv * 0.3));
 
-  // ── Layer 2: calendar boosts — DISABLED until a full season is in the data.
-  // Kept (behind APPLY_CALENDAR_BOOSTS) so they can be re-enabled + re-tested
-  // once a real Christmas/Valentine's exists in the history.
+  // ── Layer 2 ────────────────────────────────────────────────────────────────
+  // Calendar GUESSES (holiday/payday/noise) stay DISABLED until a full season is
+  // in the data (the 2026-06-09 backtest showed they hurt accuracy ~45%).
+  // Owner-entered PROMOS are different: that's knowledge, not a guess — an
+  // explicit "20% off next week" must lift those products' forecast, so the
+  // promo multiplier applies regardless of the calendar flag. The 3× cap below
+  // still bounds the result.
   const signals: Signal[] = [];
   let boosted = layer1;
+
+  const promo = activePromoLift(input.activePromos, input.productType, input.vendor, input.sku);
+  if (promo.lift > 1.01) {
+    signals.push({ label: `Active promo ${promo.channel ?? ""} +${((promo.lift - 1) * 100).toFixed(0)}%`, deltaPct: (promo.lift - 1) * 100, emoji: "🏷️" });
+    boosted = boosted * promo.lift;
+  }
+
   if (APPLY_CALENDAR_BOOSTS) {
     const hol = lookaheadHolidayBoost(input.productType, today);
     if (hol.boost > 1.05) {
@@ -201,13 +212,9 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
     if (payLift > 1.02) {
       signals.push({ label: `Payday weeks +${((payLift - 1) * 100).toFixed(0)}%`, deltaPct: (payLift - 1) * 100, emoji: "💰" });
     }
-    const promo = activePromoLift(input.activePromos, input.productType, input.vendor, input.sku);
-    if (promo.lift > 1.01) {
-      signals.push({ label: `Active promo ${promo.channel ?? ""} +${((promo.lift - 1) * 100).toFixed(0)}%`, deltaPct: (promo.lift - 1) * 100, emoji: "🏷️" });
-    }
     const rng = mulberry32(seedFrom([input.productId, input.runDateKey ?? today]));
     const noise = 0.95 + rng() * 0.1;
-    boosted = layer1 * hol.boost * payLift * promo.lift * noise;
+    boosted = boosted * hol.boost * payLift * noise;
   }
 
   // ── Safety cap: never exceed 3× the product's best trailing month ─────────
@@ -238,9 +245,13 @@ export function simulateLayeredForecast(input: ForecastInput): ForecastResult {
   });
   const rop = reorderPoint(dailyRate, input.leadTimeAvg, safety);
   const daysLeft = daysOfStockRemaining(input.currentStock, dailyRate);
-  const urgency = urgencyFromDays(daysLeft);
 
-  const recommendedQty = Math.max(0, Math.ceil(finalForecast30d + safety - input.currentStock));
+  // No run rate = nothing to restock. A product that isn't selling must never be
+  // recommended or counted as a stockout, even at zero stock (Dave, 2026-06-11):
+  // zero sales + zero stock is a dead listing, not an emergency.
+  const isDead = dailyRate <= 0;
+  const urgency = isDead ? "low" : urgencyFromDays(daysLeft);
+  const recommendedQty = isDead ? 0 : Math.max(0, Math.ceil(finalForecast30d + safety - input.currentStock));
 
   const reasoning = [
     `Forecast ${finalForecast30d.toFixed(0)} units over 30 days from the ${isNew ? "last-30-day rate (new product)" : "recency-weighted run rate (30/90/365-day blend)"}: ${dailyRate.toFixed(2)} units/day.`,

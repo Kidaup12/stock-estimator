@@ -87,7 +87,14 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
   }
 
   if (loading || !data) {
-    return <main className="min-h-screen bg-canvas p-8 text-center text-mute text-sm">Loading…</main>;
+    return (
+      <main className="min-h-screen bg-canvas">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8 py-7 space-y-4">
+          <div className="skeleton h-32 max-w-xl" />
+          <div className="skeleton h-64" />
+        </div>
+      </main>
+    );
   }
 
   const { product, history, prediction } = data;

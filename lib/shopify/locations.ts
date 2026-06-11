@@ -1,14 +1,12 @@
 /**
  * Location classification for inventory sync.
  *
- * Beauty Square's Shopify has non-sellable locations that must NOT count as
- * on-hand stock:
- *  - "(Virtual)" placeholder locations.
+ * Per Dave/Mary (2026-06-11 review): EVERY Shopify location holds real shelf
+ * stock — including the "(Virtual)" locations — EXCEPT the en-route bucket:
  *  - "INCOMING (QB) ENROUTE ORDERS" — stock on a QuickBooks purchase order,
- *    ordered but not yet received (en-route). It's a "coming soon" bucket, not
- *    real shelf stock, and must be EXCLUDED from currentStock (counting it would
- *    inflate on-hand → under-ordering + wrong days-of-cover) and excluded from
- *    Shopify↔QuickBooks reconciliation.
+ *    ordered but not yet received. It's a "coming soon" bucket, not shelf
+ *    stock; counting it would inflate on-hand → under-ordering and wrong
+ *    days-of-cover.
  *
  * En-route quantities instead feed each product's `onOrder` (the dashboard's
  * "En route" column + the reorder math, which subtracts on-order so it doesn't
@@ -21,10 +19,8 @@ export function isEnrouteLocation(name: string | null | undefined): boolean {
   return /incoming|en[\s-]?route/.test(n);
 }
 
-/** True only for real, sellable shelf locations (excludes Virtual + en-route). */
+/** True for real, sellable stock locations — everything except en-route.
+ *  Virtual locations COUNT as real stock (confirmed by the shop owner). */
 export function isSellableLocation(name: string | null | undefined): boolean {
-  const n = (name ?? "").toLowerCase();
-  if (/virtual|\(qb\)/.test(n)) return false;
-  if (isEnrouteLocation(n)) return false;
-  return true;
+  return !isEnrouteLocation(name);
 }

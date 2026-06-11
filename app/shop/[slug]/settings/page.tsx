@@ -25,8 +25,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok?: boolean; message: string } | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [seedResult, setSeedResult] = useState<string | null>(null);
   const [forecasting, setForecasting] = useState(false);
   const [forecastResult, setForecastResult] = useState<string | null>(null);
 
@@ -75,21 +73,6 @@ export default function SettingsPage() {
       if (res.ok) await load();
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function runSeed() {
-    setSeeding(true);
-    setSeedResult(null);
-    try {
-      const res = await apiFetch(slug, "/api/seed", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) { setSeedResult(`Error: ${data.error}`); return; }
-      setSeedResult(`Seeded ${data.productsSeeded} products with 12 months of synthetic sales.`);
-    } catch (e) {
-      setSeedResult(`Error: ${e instanceof Error ? e.message : "Seed failed"}`);
-    } finally {
-      setSeeding(false);
     }
   }
 
@@ -153,17 +136,7 @@ export default function SettingsPage() {
             )}
           </Section>
 
-          <Section
-            title="Catalogue & sales data"
-            description="Pulls products and generates synthetic sales history calibrated to Kenya patterns (payday weeks, V-Day, Jamhuri, Christmas, Eid)."
-          >
-            <button onClick={runSeed} disabled={seeding || !shop} className="btn-primary w-full disabled:bg-mute disabled:hover:bg-mute">
-              {seeding ? "Seeding catalogue (30–60s)…" : "Seed / Resync catalogue"}
-            </button>
-            {seedResult && (
-              <ResultBanner ok={!seedResult.startsWith("Error")} message={seedResult} />
-            )}
-          </Section>
+          <UsersSection slug={slug} />
 
           <Section
             title="Forecasts"
@@ -188,6 +161,102 @@ export default function SettingsPage() {
         {loading && <div className="text-center text-mute text-sm mt-6">Loading…</div>}
       </div>
     </main>
+  );
+}
+
+type Member = { id: string; email: string; role: "OWNER" | "MEMBER"; isYou: boolean };
+
+/** Users — owners add teammates by email (they sign in with the same 6-digit code). */
+function UsersSection({ slug }: { slug: string }) {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"OWNER" | "MEMBER">("MEMBER");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function load() {
+    const res = await apiFetch(slug, "/api/members");
+    if (res.ok) {
+      const d = await res.json();
+      setMembers(d.members ?? []);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  const youAreOwner = members.some(m => m.isYou && m.role === "OWNER");
+
+  async function add() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await apiFetch(slug, "/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setMsg(`Error: ${d.error ?? "could not add"}`); return; }
+      setMsg(`${email.trim()} added — they sign in at this URL with their email + code.`);
+      setEmail("");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(m: Member) {
+    if (!confirm(`Remove ${m.email} from this shop?`)) return;
+    const res = await apiFetch(slug, "/api/members", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ membershipId: m.id }),
+    });
+    const d = await res.json();
+    if (!res.ok) { setMsg(`Error: ${d.error ?? "could not remove"}`); return; }
+    await load();
+  }
+
+  return (
+    <Section
+      title="Users"
+      description="Who can sign in to this shop. Owners manage users; members see everything else."
+    >
+      <div className="divide-y divide-line border border-line rounded-xl overflow-hidden mb-4">
+        {members.length === 0 ? (
+          <div className="px-4 py-4 text-sm text-mute">Loading team…</div>
+        ) : members.map(m => (
+          <div key={m.id} className="px-4 py-3 flex items-center gap-3 bg-canvas-raised">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium truncate">{m.email}{m.isYou && <span className="text-2xs text-mute font-normal"> · you</span>}</div>
+            </div>
+            <span className={m.role === "OWNER" ? "badge-info" : "badge-mute"}>{m.role === "OWNER" ? "Owner" : "Member"}</span>
+            {youAreOwner && !m.isYou && (
+              <button onClick={() => remove(m)} className="text-2xs text-mute hover:text-status-bad transition">Remove</button>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {youAreOwner && (
+        <div className="flex items-end gap-2 flex-wrap">
+          <label className="block flex-1 min-w-[220px]">
+            <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Email</span>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@shop.co.ke" className="input" />
+          </label>
+          <label className="block">
+            <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Role</span>
+            <select value={role} onChange={e => setRole(e.target.value as "OWNER" | "MEMBER")} className="input w-32">
+              <option value="MEMBER">Member</option>
+              <option value="OWNER">Owner</option>
+            </select>
+          </label>
+          <button onClick={add} disabled={busy || !email.includes("@")} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+            {busy ? "Adding…" : "Add user"}
+          </button>
+        </div>
+      )}
+      {msg && <ResultBanner ok={!msg.startsWith("Error")} message={msg} />}
+    </Section>
   );
 }
 

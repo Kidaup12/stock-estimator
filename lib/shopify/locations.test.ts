@@ -7,8 +7,8 @@ describe("isSellableLocation", () => {
     expect(isSellableLocation("New Stanley Building Opposite Lonhro House, CBD")).toBe(true);
     expect(isSellableLocation("Lavington- Valley Field Court,Hendred Avenue")).toBe(true);
   });
-  it("virtual locations are NOT sellable", () => {
-    expect(isSellableLocation("Main Warehouse- Nairobi (Virtual)")).toBe(false);
+  it("virtual locations ARE sellable — owner confirmed they hold real stock (2026-06-11)", () => {
+    expect(isSellableLocation("Main Warehouse- Nairobi (Virtual)")).toBe(true);
   });
   it("the en-route / incoming QB location is NOT sellable", () => {
     expect(isSellableLocation("INCOMING (QB) ENROUTE ORDERS")).toBe(false);

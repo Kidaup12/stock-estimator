@@ -18,6 +18,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // ?mode=sync -> hourly: refresh products/stock/sales only (fast, light).
+  // ?mode=full -> sync + re-forecast (default; the 6-hourly/nightly run).
+  const mode = req.nextUrl.searchParams.get("mode") === "sync" ? "sync" : "full";
+
   const tenants = await prisma.shopifyConnection.findMany({
     where: { uninstalledAt: null },
     select: { tenantId: true },
@@ -26,11 +30,11 @@ export async function GET(req: NextRequest) {
   const results: Array<{ tenantId: string; ok: boolean; detail?: unknown }> = [];
   for (const t of tenants) {
     try {
-      const r = await reconcileTenant(t.tenantId);
+      const r = await reconcileTenant(t.tenantId, undefined, { skipForecast: mode === "sync" });
       results.push({ tenantId: t.tenantId, ok: true, detail: r });
     } catch (err) {
       results.push({ tenantId: t.tenantId, ok: false, detail: (err as Error).message });
     }
   }
-  return NextResponse.json({ ok: true, tenants: results.length, results });
+  return NextResponse.json({ ok: true, mode, tenants: results.length, results });
 }
