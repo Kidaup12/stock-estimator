@@ -35,9 +35,11 @@ describe("buildPositionView", () => {
     windowDays: 30,
     rows: [
       { productId: "p1", title: "A-item", sku: "1", abc: "A", currentStock: 60, onOrder: 10,
+        vendor: "COSRX", supplierName: "Guangzhou Beauty Imports", importCategory: "KOREAN",
         expectedArrivalAt: null, leadTimeAvgDays: 30, leadTimeStdDays: 7,
         soldInWindow: 90, snapshotOnHand: 120 },
       { productId: "p2", title: "C-item", sku: "2", abc: null, currentStock: 5, onOrder: 0,
+        vendor: null, supplierName: null, importCategory: null,
         expectedArrivalAt: null, leadTimeAvgDays: null, leadTimeStdDays: null,
         soldInWindow: 0, snapshotOnHand: null },
     ],

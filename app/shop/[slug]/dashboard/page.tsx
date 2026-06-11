@@ -160,10 +160,11 @@ export default function Dashboard() {
             <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Live</span>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/shop/${slug}/stock-health`} className="btn-ghost">Stock health</Link>
+            <Link href={`/shop/${slug}/products`} className="btn-ghost">Products</Link>
             <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
             <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
-            <Link href={`/shop/${slug}/simulate`} className="btn-ghost">Simulate</Link>
+            <Link href={`/shop/${slug}/restock-planner`} className="btn-ghost">Restock Planner</Link>
+            <Link href={`/shop/${slug}/orders`} className="btn-ghost">Orders</Link>
             <Link href={`/shop/${slug}/settings`} className="btn-ghost">Settings</Link>
             <NavMore slug={slug} />
             <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
+import { toCsv, saveTextFile } from "@/lib/csv";
 
 type Facet = { name: string; count: number };
 
@@ -19,6 +20,8 @@ type BudgetItem = {
   daysUntilStockout: number;
   urgency: "critical" | "high" | "medium" | "low";
   supplierName: string | null;
+  importCategory: string | null;
+  leadDays: number;
   cost: number;
   revenue: number;
   margin: number;
@@ -90,7 +93,7 @@ const PRESET_EVENTS = [
   { name: "Christmas", uplift: 2.5, scope: "all" as const, scopeValue: null, days: 45 },
 ];
 
-export default function SimulatePage() {
+export default function RestockPlannerPage() {
   const { slug } = useParams<{ slug: string }>();
   const [facets, setFacets] = useState<{ categories: Facet[]; brands: Facet[] }>({ categories: [], brands: [] });
 
@@ -98,6 +101,10 @@ export default function SimulatePage() {
   const [budgetInput, setBudgetInput] = useState<string>("800000");
   const [budgetResult, setBudgetResult] = useState<BudgetResult | null>(null);
   const [runningBudget, setRunningBudget] = useState(false);
+  // Row selection for the bulk actions (productIds; default = every "Buy now" row).
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [ordering, setOrdering] = useState(false);
+  const [orderedMsg, setOrderedMsg] = useState<string | null>(null);
 
   // Demand shock state
   const [shockUplift, setShockUplift] = useState<string>("2.0");
@@ -114,14 +121,79 @@ export default function SimulatePage() {
 
   async function runBudget() {
     setRunningBudget(true);
+    setOrderedMsg(null);
     const res = await apiFetch(slug, "/api/simulate/budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ budgetKes: parseFloat(budgetInput) }),
     });
-    const data = await res.json();
+    const data: BudgetResult = await res.json();
     setBudgetResult(data);
+    // Default: every recommended "Buy now" row is checked, ready to act on.
+    setChecked(new Set((data.selected ?? []).map(it => it.productId)));
     setRunningBudget(false);
+  }
+
+  function toggleChecked(productId: string) {
+    setChecked(prev => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  }
+
+  const checkedItems = budgetResult?.selected.filter(it => checked.has(it.productId)) ?? [];
+  const checkedCost = checkedItems.reduce((s, it) => s + it.cost, 0);
+
+  async function bulkOrder() {
+    if (checkedItems.length === 0) return;
+    setOrdering(true);
+    setOrderedMsg(null);
+    try {
+      const res = await apiFetch(slug, "/api/orders/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: checkedItems.map(it => ({
+            productId: it.productId,
+            qty: Math.max(1, Math.ceil(it.recommendedQty)),
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setOrderedMsg(`Error: ${data.error ?? "bulk order failed"}`); return; }
+      setOrderedMsg(`Marked ${data.ordered} item${data.ordered === 1 ? "" : "s"} as ordered — they're now tracked on the Orders page.`);
+    } finally {
+      setOrdering(false);
+    }
+  }
+
+  function downloadOrderSheet() {
+    if (checkedItems.length === 0) return;
+    // Grouped by supplier so Mary can send each block straight to its supplier.
+    const rows = [...checkedItems]
+      .sort((a, b) => (a.supplierName ?? "zzz").localeCompare(b.supplierName ?? "zzz") || a.title.localeCompare(b.title))
+      .map(it => {
+        const qty = Math.max(1, Math.ceil(it.recommendedQty));
+        const unitCost = qty > 0 ? it.cost / it.recommendedQty : 0;
+        const eta = new Date(Date.now() + it.leadDays * 86_400_000).toISOString().slice(0, 10);
+        return [
+          it.supplierName ?? "Unassigned",
+          it.sku,
+          it.title,
+          it.importCategory ?? "—",
+          qty,
+          Math.round(unitCost),
+          Math.round(unitCost * qty),
+          eta,
+        ];
+      });
+    const csv = toCsv(
+      ["Supplier", "SKU", "Product", "Category", "Qty", "Unit cost (KES)", "Line total (KES)", "Est. arrival"],
+      rows
+    );
+    saveTextFile(`order-sheet-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   }
 
   function applyPreset(p: typeof PRESET_EVENTS[number]) {
@@ -166,20 +238,20 @@ export default function SimulatePage() {
 
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-7 space-y-6">
         <div>
-          <div className="text-2xs uppercase tracking-wider text-mute">What-if scenarios</div>
-          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Simulate</h1>
+          <div className="text-2xs uppercase tracking-wider text-mute">Plan → order in one flow</div>
+          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Restock Planner</h1>
           <p className="text-sm text-ink-soft mt-2 max-w-2xl">
-            Preview decisions before you commit. All scenarios are read-only — no database changes until you act on the results.
+            Tell it your budget, get the smartest restock list for that money — then mark everything as ordered and download the order sheet for your suppliers.
           </p>
         </div>
 
-        {/* Cash budget allocator */}
+        {/* Budget planner */}
         <section className="card p-6">
           <div className="mb-4">
-            <div className="text-2xs uppercase tracking-wider text-mute">Scenario 1 — cash budget</div>
-            <h2 className="text-base font-semibold tracking-tight mt-0.5">&ldquo;I have this much to spend on reorders this month — what do I buy?&rdquo;</h2>
+            <div className="text-2xs uppercase tracking-wider text-mute">Step 1 — your budget</div>
+            <h2 className="text-base font-semibold tracking-tight mt-0.5">&ldquo;I have this much to spend on restocking — what do I buy?&rdquo;</h2>
             <p className="text-sm text-ink-soft mt-2 max-w-3xl leading-relaxed">
-              Critical SKUs are always included (even if they overflow your budget). Then we add remaining items ranked by composite score (urgency × margin) until the budget is hit. Deferred items are shown with their stockout risk.
+              Critical SKUs are always included (even if they overflow your budget). The rest are ranked by urgency × margin until the budget is used. Deferred items are shown with their stockout risk.
             </p>
           </div>
 
@@ -228,8 +300,46 @@ export default function SimulatePage() {
                 </div>
               )}
 
+              {/* Step 2 — act on the list */}
+              <div className="p-4 rounded-2xl border border-accent-100 bg-accent-50 flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[220px]">
+                  <div className="text-2xs uppercase tracking-wider text-accent-700 font-semibold">Step 2 — act on it</div>
+                  <div className="text-sm text-ink-soft mt-0.5">
+                    <span className="num font-semibold">{checkedItems.length}</span> of {budgetResult.selectedCount} items ticked · KES <span className="num font-semibold">{KESshort(checkedCost)}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={downloadOrderSheet}
+                  disabled={checkedItems.length === 0}
+                  className="btn-ghost disabled:opacity-50"
+                >
+                  Download order sheet (CSV)
+                </button>
+                <button
+                  onClick={bulkOrder}
+                  disabled={ordering || checkedItems.length === 0}
+                  className="btn-accent disabled:bg-mute disabled:hover:bg-mute"
+                >
+                  {ordering ? "Marking…" : `Mark ${checkedItems.length} as ordered`}
+                </button>
+              </div>
+              {orderedMsg && (
+                <div className={`p-3 rounded-xl text-sm border ${orderedMsg.startsWith("Error") ? "border-status-bad/30 bg-status-bad/5 text-status-bad" : "border-status-ok/30 bg-status-ok/5 text-status-ok"}`}>
+                  {orderedMsg}
+                  {!orderedMsg.startsWith("Error") && (
+                    <> <Link href={`/shop/${slug}/orders`} className="underline font-medium">View orders →</Link></>
+                  )}
+                </div>
+              )}
+
               <div className="grid lg:grid-cols-2 gap-4">
-                <BudgetList title={`Buy now · ${budgetResult.selectedCount}`} items={budgetResult.selected} tone="accent" />
+                <BudgetList
+                  title={`Buy now · ${budgetResult.selectedCount}`}
+                  items={budgetResult.selected}
+                  tone="accent"
+                  checked={checked}
+                  onToggle={toggleChecked}
+                />
                 <BudgetList title={`Defer · ${budgetResult.deferredCount}`} items={budgetResult.deferred} tone="muted" />
               </div>
             </div>
@@ -239,7 +349,7 @@ export default function SimulatePage() {
         {/* Demand shock */}
         <section className="card p-6">
           <div className="mb-4">
-            <div className="text-2xs uppercase tracking-wider text-mute">Scenario 2 — demand shock</div>
+            <div className="text-2xs uppercase tracking-wider text-mute">What-if — demand spike</div>
             <h2 className="text-base font-semibold tracking-tight mt-0.5">&ldquo;A holiday is coming. Should I bulk order ahead?&rdquo;</h2>
             <p className="text-sm text-ink-soft mt-2 max-w-3xl leading-relaxed">
               Bump the 30-day forecast for a category or brand and see the new reorder list. Lead-time feasibility flags items where the supplier&apos;s 90th-percentile lead is longer than your runway to the event.
@@ -378,8 +488,16 @@ function Kpi({ label, value, hint, tone = "default" }: { label: string; value: s
   );
 }
 
-function BudgetList({ title, items, tone }: { title: string; items: BudgetItem[]; tone: "accent" | "muted" }) {
+function BudgetList({ title, items, tone, checked, onToggle }: {
+  title: string;
+  items: BudgetItem[];
+  tone: "accent" | "muted";
+  /** When provided, rows render a checkbox (the actionable "Buy now" list). */
+  checked?: Set<string>;
+  onToggle?: (productId: string) => void;
+}) {
   const { slug } = useParams<{ slug: string }>();
+  const selectable = !!checked && !!onToggle;
   return (
     <div className="card overflow-hidden">
       <div className={`px-4 py-3 border-b border-line ${tone === "accent" ? "bg-accent-50" : "bg-canvas-tint"}`}>
@@ -390,25 +508,34 @@ function BudgetList({ title, items, tone }: { title: string; items: BudgetItem[]
           <div className="px-4 py-8 text-center text-2xs text-mute">Nothing here</div>
         )}
         {items.slice(0, 100).map(it => (
-          <Link href={`/shop/${slug}/dashboard/product/${it.productId}`} key={it.predictionId} className="block px-4 py-2.5 hover:bg-canvas">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{it.title}</div>
-                <div className="text-2xs text-mute mt-0.5 flex items-center gap-1.5">
-                  <UrgencyDot u={it.urgency} />
-                  <span>{it.vendor || "—"}</span>
-                  <span>·</span>
-                  <span className="num">{it.recommendedQty.toFixed(0)} units</span>
-                  <span>·</span>
-                  <span className="num">{it.daysUntilStockout}d left</span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-semibold num">KES {KESshort(it.cost)}</div>
-                <div className="text-2xs text-mute num">→ KES {KESshort(it.revenue)}</div>
+          <div key={it.predictionId} className="flex items-center gap-3 px-4 py-2.5 hover:bg-canvas">
+            {selectable && (
+              <input
+                type="checkbox"
+                checked={checked!.has(it.productId)}
+                onChange={() => onToggle!(it.productId)}
+                className="h-4 w-4 shrink-0 accent-[var(--color-accent-600)] cursor-pointer"
+                aria-label={`Include ${it.title} in the order`}
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <Link href={`/shop/${slug}/dashboard/product/${it.productId}`} className="text-sm font-medium truncate block hover:underline">
+                {it.title}
+              </Link>
+              <div className="text-2xs text-mute mt-0.5 flex items-center gap-1.5">
+                <UrgencyDot u={it.urgency} />
+                <span>{it.vendor || "—"}</span>
+                <span>·</span>
+                <span className="num">{it.recommendedQty.toFixed(0)} units</span>
+                <span>·</span>
+                <span className="num">{it.daysUntilStockout}d left</span>
               </div>
             </div>
-          </Link>
+            <div className="text-right shrink-0">
+              <div className="text-sm font-semibold num">KES {KESshort(it.cost)}</div>
+              <div className="text-2xs text-mute num">→ KES {KESshort(it.revenue)}</div>
+            </div>
+          </div>
         ))}
       </div>
     </div>

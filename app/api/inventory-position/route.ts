@@ -22,9 +22,9 @@ export async function GET(req: NextRequest) {
     prisma.product.findMany({
       where: { tenantId },
       select: {
-        id: true, title: true, sku: true, abcCategory: true, currentStock: true,
+        id: true, title: true, sku: true, abcCategory: true, currentStock: true, vendor: true,
         onOrder: true, expectedArrivalAt: true, leadTimeDays: true, importCategory: true,
-        supplier: { select: { leadTimeAvgDays: true, leadTimeStdDays: true } },
+        supplier: { select: { name: true, leadTimeAvgDays: true, leadTimeStdDays: true } },
       },
     }),
     prisma.salesHistory.groupBy({
@@ -58,6 +58,9 @@ export async function GET(req: NextRequest) {
     title: p.title,
     sku: p.sku,
     abc: (p.abcCategory as Abc | null) ?? null,
+    vendor: p.vendor,
+    supplierName: p.supplier?.name ?? null,
+    importCategory: p.importCategory,
     currentStock: p.currentStock,
     onOrder: p.onOrder,
     expectedArrivalAt: p.expectedArrivalAt,

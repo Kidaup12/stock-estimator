@@ -57,6 +57,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       onOrder: product.onOrder,
       expectedArrivalAt: product.expectedArrivalAt,
       leadTimeDays: product.leadTimeDays,
+      importCategory: product.importCategory,
       supplier: product.supplier
         ? {
             id: product.supplier.id,
@@ -99,11 +100,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { tenant } = auth;
 
   const body = await req.json().catch(() => ({}));
-  const data: { supplierId?: string | null; leadTimeDays?: number | null } = {};
+  const data: { supplierId?: string | null; leadTimeDays?: number | null; importCategory?: string | null } = {};
   if ("supplierId" in body) data.supplierId = typeof body.supplierId === "string" ? body.supplierId : null;
   if ("leadTimeDays" in body) {
     const n = Number.parseInt(body.leadTimeDays, 10);
     data.leadTimeDays = Number.isFinite(n) && n > 0 ? n : null; // blank/invalid → clear override
+  }
+  if ("importCategory" in body) {
+    const v = typeof body.importCategory === "string" ? body.importCategory.toUpperCase() : null;
+    data.importCategory = v === "LOCAL" || v === "KOREAN" || v === "WESTERN" ? v : null; // anything else clears
   }
 
   // Tenant-scoped write (updateMany so the where carries tenantId).
