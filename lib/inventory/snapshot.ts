@@ -13,19 +13,19 @@ export function utcDayKey(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-/** Upsert today's on-hand snapshot for every product of a tenant. */
+/** Replace today's on-hand snapshot for every product of a tenant.
+ *  Batched (delete-day + createMany): the old per-product upsert was ~2,000
+ *  round-trips and helped blow Vercel's 300s cap on the cron. Idempotent on
+ *  (productId, date) exactly as before — same-day re-runs overwrite. */
 export async function snapshotInventory(tenantId: string): Promise<{ count: number }> {
   const day = utcDayKey(new Date());
   const products = await prisma.product.findMany({
     where: { tenantId },
     select: { id: true, currentStock: true },
   });
-  for (const p of products) {
-    await prisma.inventorySnapshot.upsert({
-      where: { productId_date: { productId: p.id, date: day } },
-      create: { tenantId, productId: p.id, date: day, onHand: p.currentStock },
-      update: { onHand: p.currentStock },
-    });
-  }
+  await prisma.inventorySnapshot.deleteMany({ where: { tenantId, date: day } });
+  await prisma.inventorySnapshot.createMany({
+    data: products.map((p) => ({ tenantId, productId: p.id, date: day, onHand: p.currentStock })),
+  });
   return { count: products.length };
 }

@@ -12,7 +12,6 @@ import {
   fetchLocationsWithInventory,
 } from "./paginate";
 import {
-  upsertProductFromShopify,
   upsertLocationFromShopify,
   type ShopifyProductNode,
   type ShopifyLocationNode,
@@ -110,12 +109,93 @@ export async function reconcileTenant(
   const locations = (await fetchLocationsWithInventory(shopDomain)) as ShopifyLocationNode[];
   const { sellable: onHandByGid, enroute: enrouteByGid } = sumOnHandByType(locations);
 
-  // Upsert products with their summed on_hand as currentStock.
-  const productIdByGid = new Map<string, string>();
-  for (const p of products) {
-    const localId = await upsertProductFromShopify(tenantId, p, onHandByGid.get(p.id) ?? 0);
-    productIdByGid.set(p.id, localId);
+  // Upsert the changed-products window in BATCHES (the per-product upsert loop
+  // was thousands of round-trips when cursors were stale — a 300s-timeout cause).
+  // currentStock is intentionally NOT written here: the authoritative reset below
+  // sets stock/onOrder for every product from the full inventory fetch anyway.
+  const known = await prisma.product.findMany({
+    where: { tenantId },
+    select: { id: true, shopifyProductId: true },
+  });
+  const productIdByGid = new Map<string, string>(known.map((k) => [k.shopifyProductId, k.id]));
+
+  const mapNode = (node: ShopifyProductNode) => {
+    const firstVariant = node.variants?.[0];
+    const priceRaw = firstVariant?.price ? Number.parseFloat(firstVariant.price) : 0;
+    const costRaw = firstVariant?.inventoryItem?.unitCost?.amount;
+    const costParsed = costRaw ? Number.parseFloat(costRaw) : undefined;
+    return {
+      shopifyProductId: node.id,
+      shopifyVariantId: firstVariant?.id ?? "",
+      sku: firstVariant?.sku ?? "",
+      title: node.title ?? "(untitled)",
+      vendor: node.vendor ?? null,
+      productType: node.productType ?? null,
+      priceKes: Number.isFinite(priceRaw) ? priceRaw : 0,
+      // Only write cost when Shopify provides one — never clobber with 0.
+      costKes: costParsed !== undefined && Number.isFinite(costParsed) ? costParsed : undefined,
+      imageUrl: node.featuredImage?.url ?? null,
+    };
+  };
+
+  const mapped = products.map(mapNode);
+  const fresh = mapped.filter((m) => !productIdByGid.has(m.shopifyProductId));
+  const existing = mapped.filter((m) => productIdByGid.has(m.shopifyProductId));
+
+  if (fresh.length > 0) {
+    await prisma.product.createMany({
+      data: fresh.map((m) => ({
+        tenantId,
+        shopifyProductId: m.shopifyProductId,
+        shopifyVariantId: m.shopifyVariantId,
+        sku: m.sku,
+        title: m.title,
+        vendor: m.vendor,
+        productType: m.productType,
+        priceKes: m.priceKes,
+        ...(m.costKes !== undefined ? { costKes: m.costKes } : {}),
+        imageUrl: m.imageUrl,
+        currentStock: 0, // authoritative reset below fills it
+      })),
+      skipDuplicates: true,
+    });
+    const freshRows = await prisma.product.findMany({
+      where: { tenantId, shopifyProductId: { in: fresh.map((m) => m.shopifyProductId) } },
+      select: { id: true, shopifyProductId: true },
+    });
+    for (const r of freshRows) productIdByGid.set(r.shopifyProductId, r.id);
   }
+
+  const UPSERT_CHUNK = 250;
+  for (const withCost of [true, false]) {
+    const group = existing.filter((m) => (m.costKes !== undefined) === withCost);
+    for (let i = 0; i < group.length; i += UPSERT_CHUNK) {
+      const chunk = group.slice(i, i + UPSERT_CHUNK);
+      const tuples = chunk.map((m) =>
+        withCost
+          ? Prisma.sql`(${productIdByGid.get(m.shopifyProductId)!}, ${m.shopifyVariantId}, ${m.sku}, ${m.title}, ${m.vendor}, ${m.productType}, ${m.priceKes}::float8, ${m.imageUrl}, ${m.costKes!}::float8)`
+          : Prisma.sql`(${productIdByGid.get(m.shopifyProductId)!}, ${m.shopifyVariantId}, ${m.sku}, ${m.title}, ${m.vendor}, ${m.productType}, ${m.priceKes}::float8, ${m.imageUrl})`
+      );
+      if (withCost) {
+        await prisma.$executeRaw`
+          UPDATE "Product" AS p
+          SET "shopifyVariantId" = v.variant, "sku" = v.sku, "title" = v.title,
+              "vendor" = v.vendor, "productType" = v.ptype, "priceKes" = v.price,
+              "imageUrl" = v.image, "costKes" = v.cost, "lastSynced" = NOW()
+          FROM (VALUES ${Prisma.join(tuples)}) AS v(id, variant, sku, title, vendor, ptype, price, image, cost)
+          WHERE p.id = v.id AND p."tenantId" = ${tenantId}`;
+      } else {
+        await prisma.$executeRaw`
+          UPDATE "Product" AS p
+          SET "shopifyVariantId" = v.variant, "sku" = v.sku, "title" = v.title,
+              "vendor" = v.vendor, "productType" = v.ptype, "priceKes" = v.price,
+              "imageUrl" = v.image, "lastSynced" = NOW()
+          FROM (VALUES ${Prisma.join(tuples)}) AS v(id, variant, sku, title, vendor, ptype, price, image)
+          WHERE p.id = v.id AND p."tenantId" = ${tenantId}`;
+      }
+    }
+  }
+
   // AUTHORITATIVE refresh for EVERY product. The location fetch is a FULL refresh,
   // so a product absent from the on_hand data has ZERO sellable stock — reset it,
   // don't leave a stale inflated currentStock. Same for en-route → onOrder. Without
@@ -123,16 +203,16 @@ export async function reconcileTenant(
   //
   // BATCHED via VALUES join: the old per-product update was ~2,000 round-trips,
   // which (with serverless→EU-Postgres latency) blew Vercel's 300s maxDuration.
-  const known = await prisma.product.findMany({
+  const allKnown = await prisma.product.findMany({
     where: { tenantId },
     select: { id: true, shopifyProductId: true },
   });
-  for (const k of known) {
+  for (const k of allKnown) {
     if (!productIdByGid.has(k.shopifyProductId)) productIdByGid.set(k.shopifyProductId, k.id);
   }
   const CHUNK = 500;
-  for (let i = 0; i < known.length; i += CHUNK) {
-    const chunk = known.slice(i, i + CHUNK);
+  for (let i = 0; i < allKnown.length; i += CHUNK) {
+    const chunk = allKnown.slice(i, i + CHUNK);
     const tuples = chunk.map((k) =>
       Prisma.sql`(${k.id}, ${onHandByGid.get(k.shopifyProductId) ?? 0}::float8, ${Math.round(enrouteByGid.get(k.shopifyProductId) ?? 0)}::int)`
     );

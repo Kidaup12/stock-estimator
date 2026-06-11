@@ -51,22 +51,38 @@ export function bucketSalesByProductDay(
   return buckets;
 }
 
-/** Overwrite SalesHistory for each bucketed (product, day). Idempotent. */
+/** Overwrite SalesHistory for each bucketed (product, day). Idempotent.
+ *  Batched: delete exactly the touched (product, day) pairs, then createMany —
+ *  2-3 queries instead of one upsert round-trip per pair (the per-row version
+ *  contributed to the cron's 300s Vercel timeout). SET semantics unchanged. */
 export async function applySalesForWindow(
   tenantId: string,
   orders: ShopifyOrderNode[],
   productIdByGid: Map<string, string>
 ): Promise<number> {
-  const buckets = bucketSalesByProductDay(orders, productIdByGid);
-  let written = 0;
-  for (const b of buckets.values()) {
-    const date = new Date(`${b.dateKey}T00:00:00.000Z`);
-    await prisma.salesHistory.upsert({
-      where: { productId_date_channel: { productId: b.productId, date, channel: "shopify" } },
-      create: { tenantId, productId: b.productId, date, quantity: b.quantity, revenueKes: b.revenueKes, channel: "shopify" },
-      update: { quantity: b.quantity, revenueKes: b.revenueKes }, // SET, not increment
+  const buckets = [...bucketSalesByProductDay(orders, productIdByGid).values()];
+  if (buckets.length === 0) return 0;
+
+  const rows = buckets.map((b) => ({
+    tenantId,
+    productId: b.productId,
+    date: new Date(`${b.dateKey}T00:00:00.000Z`),
+    quantity: b.quantity,
+    revenueKes: b.revenueKes,
+    channel: "shopify" as const,
+  }));
+
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    await prisma.salesHistory.deleteMany({
+      where: {
+        tenantId,
+        channel: "shopify",
+        OR: chunk.map((r) => ({ productId: r.productId, date: r.date })),
+      },
     });
-    written++;
+    await prisma.salesHistory.createMany({ data: chunk });
   }
-  return written;
+  return rows.length;
 }
