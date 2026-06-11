@@ -337,8 +337,8 @@ export default function RestockPlannerPage() {
         {/* Demand shock */}
         <section className="card p-6">
           <div className="mb-4">
-            <div className="text-2xs uppercase tracking-wider text-mute">What-if — demand spike</div>
-            <h2 className="text-base font-semibold tracking-tight mt-0.5">&ldquo;A holiday is coming. Should I bulk order ahead?&rdquo;</h2>
+            <div className="text-2xs uppercase tracking-wider text-mute">What-if</div>
+            <h2 className="text-base font-semibold tracking-tight mt-0.5">Demand spike before a holiday</h2>
             <p className="text-sm text-ink-soft mt-2 max-w-3xl leading-relaxed">
               Bump the 30-day forecast for a category or brand and see the new reorder list. Lead-time feasibility flags items where the supplier&apos;s 90th-percentile lead is longer than your runway to the event.
             </p>
@@ -395,8 +395,8 @@ export default function RestockPlannerPage() {
           </div>
 
           <div className="mt-4 flex gap-2">
-            <button onClick={runShock} disabled={runningShock} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-              {runningShock ? "Running…" : "Run shock"}
+            <button onClick={runShock} disabled={runningShock} className="btn-ghost disabled:opacity-50">
+              {runningShock ? "Running…" : "Preview the spike"}
             </button>
           </div>
 

@@ -43,7 +43,18 @@ export default function ReportsPage() {
   }, []);
 
   if (loading || !data) {
-    return <main className="min-h-screen bg-canvas p-8 text-center text-mute text-sm">Loading reports…</main>;
+    return (
+      <main className="min-h-screen bg-canvas">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-7 space-y-4">
+          <div className="skeleton h-16 max-w-sm" />
+          <div className="skeleton h-24" />
+          <div className="grid lg:grid-cols-2 gap-4">
+            <div className="skeleton h-72" />
+            <div className="skeleton h-72" />
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const maxMonthRev = Math.max(1, ...data.monthly.map(m => m.revenueKes));

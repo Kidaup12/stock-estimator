@@ -163,13 +163,40 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* KPI bar */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-px bg-line border border-line rounded-2xl overflow-hidden shadow-soft mb-6">
-          <Kpi label="30-day revenue" value={`KES ${KESshort(revenue30)}`} hint="Last 30 days" />
-          <Kpi label="Stockouts" value={stockout.length.toString()} hint="At or near zero" tone={stockout.length > 0 ? "alarm" : "default"} />
-          <Kpi label="Reorders needed" value={reorder.length.toString()} hint={`KES ${KESshort(reorderCostKes)} to pay suppliers`} tone={reorder.length > 0 ? "warn" : "default"} />
-          <Kpi label="Capital tied up in dead stock" value={`KES ${KESshort(deadCostKes)}`} hint={`${dead.length} SKUs · ${KESshort(deadRetailKes)} at retail`} tone={deadCostKes > 200000 ? "warn" : "default"} />
-          <Kpi label="Products tracked" value={predictions.length.toString()} hint="Active catalogue" />
+        {/* Needs-you-today vs context — the two action metrics lead, the rest stay quiet */}
+        <div className="grid lg:grid-cols-[1.05fr_1fr] gap-4 mb-6">
+          <div className="card p-5 flex items-stretch divide-x divide-line">
+            <button onClick={() => setTab("stockout")} className="flex-1 pr-5 text-left group">
+              <div className="text-2xs uppercase tracking-wider text-mute">Stockouts</div>
+              <div className={`text-3xl font-semibold mt-1.5 num tracking-tight ${stockout.length > 0 ? "text-status-bad" : "text-status-ok"}`}>
+                {stockout.length}
+              </div>
+              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">at or near zero stock →</div>
+            </button>
+            <button onClick={() => setTab("reorder")} className="flex-1 pl-5 text-left group">
+              <div className="text-2xs uppercase tracking-wider text-mute">Reorders needed</div>
+              <div className={`text-3xl font-semibold mt-1.5 num tracking-tight ${reorder.length > 0 ? "text-status-warn" : "text-status-ok"}`}>
+                {reorder.length}
+              </div>
+              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">KES {KESshort(reorderCostKes)} to suppliers →</div>
+            </button>
+          </div>
+          <div className="card p-5 grid grid-cols-3 divide-x divide-line">
+            <div className="pr-4">
+              <div className="text-2xs uppercase tracking-wider text-mute">30-day revenue</div>
+              <div className="text-lg font-semibold mt-1.5 num">KES {KESshort(revenue30)}</div>
+            </div>
+            <div className="px-4">
+              <div className="text-2xs uppercase tracking-wider text-mute">Dead stock</div>
+              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">KES {KESshort(deadCostKes)}</div>
+              <div className="text-2xs text-mute mt-0.5">{dead.length} SKUs at cost</div>
+            </div>
+            <div className="pl-4">
+              <div className="text-2xs uppercase tracking-wider text-mute">Tracked</div>
+              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">{predictions.length}</div>
+              <div className="text-2xs text-mute mt-0.5">forecasted SKUs</div>
+            </div>
+          </div>
         </div>
 
         {/* Monthly revenue chart */}
@@ -183,17 +210,20 @@ export default function Dashboard() {
               <div className="text-2xs text-mute">KES</div>
             </div>
             <div className="flex items-end gap-1.5 h-32">
-              {monthly.slice(-12).map(m => {
+              {monthly.slice(-12).map((m, i, arr) => {
                 const h = (m.revenueKes / maxMonthlyRev) * 100;
+                const isCurrent = i === arr.length - 1;
+                const monthIdx = Number.parseInt(m.month.slice(5), 10) - 1;
+                const label = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][monthIdx] ?? m.month.slice(5);
                 return (
-                  <div key={m.month} className="flex-1 h-full flex flex-col items-center gap-1.5 group" title={`${m.month}: KES ${KES(m.revenueKes)}`}>
-                    <div className="flex-1 w-full flex items-end">
+                  <div key={m.month} className="flex-1 h-full flex flex-col items-center group" title={`${label}: KES ${KES(m.revenueKes)}`}>
+                    <div className="flex-1 w-full flex items-end border-b border-line">
                       <div
-                        className="w-full rounded-t bg-accent-500 group-hover:bg-accent-600 transition"
-                        style={{ height: `${h}%` }}
+                        className={`w-full rounded-t-md transition-colors ${isCurrent ? "bg-accent-600" : "bg-accent-200 group-hover:bg-accent-400"}`}
+                        style={{ height: `${Math.max(2, h)}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-mute num">{m.month.slice(5)}</div>
+                    <div className={`text-[10px] mt-1.5 ${isCurrent ? "text-ink font-medium" : "text-mute"}`}>{label}</div>
                   </div>
                 );
               })}
@@ -222,7 +252,7 @@ export default function Dashboard() {
             )}
             <input
               type="search"
-              placeholder="Search products, SKU, brand…"
+              placeholder="Search products…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="input max-w-sm"
@@ -279,19 +309,6 @@ export default function Dashboard() {
         )}
       </div>
     </main>
-  );
-}
-
-function Kpi({ label, value, hint, tone = "default" }: { label: string; value: string; hint?: string; tone?: "default" | "warn" | "alarm" }) {
-  const valueColor =
-    tone === "alarm" ? "text-status-bad" :
-    tone === "warn"  ? "text-status-warn" : "";
-  return (
-    <div className="bg-canvas-raised p-4 sm:p-5">
-      <div className="text-2xs uppercase tracking-wider text-mute">{label}</div>
-      <div className={`text-2xl font-semibold mt-2 num tracking-tight ${valueColor}`}>{value}</div>
-      {hint && <div className="text-2xs text-mute mt-1">{hint}</div>}
-    </div>
   );
 }
 
