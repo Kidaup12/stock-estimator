@@ -64,6 +64,37 @@
   }
 
   .num { @apply font-mono tabular-nums; }
+
+  /* ── Premium pass (W6) ──────────────────────────────────────────────── */
+
+  /* Status / category chips — one visual language for state everywhere. */
+  .badge      { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap; }
+  .badge-ok   { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap bg-status-ok/10 text-status-ok; }
+  .badge-warn { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap bg-status-warn/10 text-status-warn; }
+  .badge-bad  { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap bg-status-bad/10 text-status-bad; }
+  .badge-info { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap bg-accent-100 text-accent-700; }
+  .badge-mute { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-medium whitespace-nowrap bg-canvas-tint text-mute; }
+
+  /* Consistent page header block under the shared nav. */
+  .page-eyebrow { @apply text-2xs uppercase tracking-wider text-mute; }
+  .page-title   { @apply text-xl font-semibold tracking-tight mt-0.5; }
+  .page-sub     { @apply text-sm text-mute mt-1 max-w-2xl; }
+
+  /* Loading skeleton. */
+  .skeleton { @apply rounded-lg bg-canvas-tint relative overflow-hidden; }
+}
+
+/* Skeleton shimmer (kept out of @apply — keyframes). */
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: skeleton-sweep 1.4s infinite;
+}
+@keyframes skeleton-sweep {
+  100% { transform: translateX(100%); }
 }
 
 .text-gradient {

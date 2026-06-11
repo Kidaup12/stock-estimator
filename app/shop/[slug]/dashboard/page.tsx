@@ -152,32 +152,15 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <div className="flex items-baseline gap-2.5">
-            <div className="h-6 w-6 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
-            <span className="text-base font-semibold tracking-tight">Wezesha Restock OS</span>
-            <span className="hidden sm:inline text-2xs text-mute uppercase tracking-[0.18em]">Live</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href={`/shop/${slug}/products`} className="btn-ghost">Products</Link>
-            <Link href={`/shop/${slug}/reports`} className="btn-ghost">Reports</Link>
-            <Link href={`/shop/${slug}/suppliers`} className="btn-ghost">Suppliers</Link>
-            <Link href={`/shop/${slug}/restock-planner`} className="btn-ghost">Restock Planner</Link>
-            <Link href={`/shop/${slug}/orders`} className="btn-ghost">Orders</Link>
-            <Link href={`/shop/${slug}/settings`} className="btn-ghost">Settings</Link>
-            <NavMore slug={slug} />
-            <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-              {busy ? "Running…" : "Re-run forecasts"}
-            </button>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-7xl mx-auto px-5 sm:px-8 py-7">
-        <div className="mb-7">
-          <div className="text-2xs uppercase tracking-wider text-mute">Beauty Square KE</div>
-          <h1 className="text-xl font-semibold tracking-tight mt-0.5">Today&apos;s replenishment view</h1>
+        <div className="mb-7 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <div className="page-eyebrow">Beauty Square KE</div>
+            <h1 className="page-title">Today&apos;s replenishment view</h1>
+          </div>
+          <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+            {busy ? "Running…" : "Re-run forecasts"}
+          </button>
         </div>
 
         {/* KPI bar */}
@@ -292,27 +275,6 @@ export default function Dashboard() {
         )}
       </div>
     </main>
-  );
-}
-
-function NavMore({ slug }: { slug: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button onClick={() => setOpen(o => !o)} className="btn-ghost" aria-haspopup="menu" aria-expanded={open}>
-        More ▾
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-1 z-30 w-44 card shadow-lift p-1 flex flex-col">
-            <Link href={`/shop/${slug}/promos`} className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Promos</Link>
-            <Link href="/pricing" className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Pricing</Link>
-            <Link href="/contact" className="px-3 py-2 text-sm rounded-lg hover:bg-canvas-tint" onClick={() => setOpen(false)}>Contact</Link>
-          </div>
-        </>
-      )}
-    </div>
   );
 }
 

@@ -110,18 +110,6 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
-            ← Dashboard
-          </Link>
-          <div className="flex items-baseline gap-2.5">
-            <div className="h-5 w-5 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
-            <span className="text-sm font-semibold tracking-tight">Wezesha Restock OS</span>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-7">
         <div className="mb-7">
           <div className="text-2xs uppercase tracking-wider text-mute">Configuration</div>
