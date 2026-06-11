@@ -31,7 +31,8 @@ export default async function ShopLayout({
   return (
     <div>
       <ShopNav slug={slug} />
-      {children}
+      {/* Content sits right of the fixed 232px rail on lg+; full-width under the mobile top bar. */}
+      <div className="lg:pl-[232px]">{children}</div>
     </div>
   );
 }

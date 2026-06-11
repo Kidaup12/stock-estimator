@@ -97,6 +97,16 @@
   100% { transform: translateX(100%); }
 }
 
+/* Mobile nav rail slide-in (ease-out-quint feel). */
+@keyframes rail-in {
+  from { transform: translateX(-12%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
 .text-gradient {
   background: linear-gradient(120deg, #17171c 0%, #6d5cd6 100%);
   -webkit-background-clip: text;
