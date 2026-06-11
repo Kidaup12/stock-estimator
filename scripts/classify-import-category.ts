@@ -31,6 +31,14 @@ const KOREAN = [
   "ESTHETIC HOUSE", "EYENLIP", "LEBELAGE", "ENOUGH", "EKEL", "MIZON", "SCINIC",
   "A'PIEU", "APIEU", "PERIPERA", "ROM&ND", "ROMAND", "CLIO", "ETUDE HOUSE",
   "SULWHASOO", "KAHI", "CENTELLIAN", "COSNORI", "SOON JUNG", "JOANNA K",
+  // Round 2 — from the live Beauty Square vendor list (Asia-import supply route,
+  // incl. Japanese/Thai brands shipped on the same lane):
+  "JUMISO", "TIAM", "MARY AND MAY", "HARUHARU", "ILLIYOON", "DR. CEURACLE",
+  "DR CEURACLE", "DR.PLINUS", "EQQUALBERRY", "S. NATURE", "SEOUL", "KOREAN",
+  "VT COSMETICS", "APLB", "YOUTH O'CLOCK", "PEACH & LILY", "DR. ALTHEA",
+  "DR.ALTHEA", "MAY ISLAND", "HADA LABO", "HADALABO", "HADA", "I'M FROM",
+  "I’M FROM", "BLITHE", "B.LAB", "MANYO", "MEDIPEEL", "MEDI PEEL", "MEDITHERPAY",
+  "FACESHOP", "NEOGEN", "HOUSE OF HUR", "CATHY DOLL", "KOSE SUNCUT", "MELANO",
 ];
 
 const WESTERN = [
@@ -44,6 +52,15 @@ const WESTERN = [
   "BYOMA", "BUBBLE", "TREE HUT", "SOL DE JANEIRO", "BATH & BODY", "VICTORIA'S SECRET",
   "LA ROCHE", "VICHY", "BIODERMA", "EUCERIN", "DIFFERIN", "PANTENE", "TRESEMM",
   "BATISTE", "MARC JACOBS", "VERSACE", "DIOR", "CHANEL", "ARMANI", "LATTAFA",
+  // Round 2 — from the live Beauty Square vendor list:
+  "NATURIUM", "SALTAIR", "FINERY", "MIXBAR", "TOPICALS", "YVES ROCHE", "YVES ROCHER",
+  "BEING FRENSHE", "BODY BY TPH", "BLACK GIRL", "GEEK & GORGEOUS", "HELIOCARE",
+  "PANOXYL", "SUMMER FRIDAYS", "AMLACTIN", "BIRETIX", "PHLUR", "CARMEX", "PFB",
+  "TIMELESS", "THE HONEY POT", "JO MALONE", "FLAMINGO", "SULFUR8", "FORVR",
+  "DERMALOGICA", "VANICREAM", "VIKTOR ROLF", "KIEHL", "FIRST AID", "AQUAPHOR",
+  "SKINSCRIPT", "SKIN SCRIPT", "EPIMAX", "CÉCRED", "CECRED", "NEST", "FACETHEORY",
+  "BIAEFFECT", "KOSASPORT", "GOOD GIRL", "ZAPZYT", "THAYERS", "NECESSAIRE",
+  "SUNKISSED", "LAYALI", "TOM FORD", "PAULA'S", "BURBERRY", "SKINOREN",
 ];
 
 // Mass-market with Kenyan distribution OR local manufacture → quick local restock.
@@ -54,6 +71,8 @@ const LOCAL = [
   "SUZIE BEAUTY", "FLORI ROBERTS", "BLACK LIKE ME", "PALMER", "ST. IVES", "ST.IVES",
   "JERGENS", "SIMPLE", "PEARS", "JOHNSON", "COLGATE", "GILLETTE", "VENUS",
   "BEAUTY SQUARE", // house brand / unbranded sundries
+  // Round 2 — Kenyan brands / pharmacy lines with local distribution:
+  "UNCOVER", "IZEZE", "EPIMOL", "LOREAL", "NIZORAL", "BEPANTHEN",
 ];
 
 type Cat = "LOCAL" | "KOREAN" | "WESTERN";
