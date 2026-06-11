@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireTenant, TenantError } from "@/lib/auth/context";
+import ShopNav from "./nav";
 
 /**
  * Auth/tenant shell for everything under /shop/[slug]/ (D-08/D-09).
@@ -29,15 +30,9 @@ export default async function ShopLayout({
 
   return (
     <div>
-      <div className="flex justify-end items-center gap-3 px-4 py-2 border-b border-line bg-canvas-raised">
-        <span className="text-2xs text-mute font-mono">{slug}</span>
-        <form action="/auth/signout" method="post">
-          <button type="submit" className="text-sm text-mute hover:text-ink transition">
-            Sign out
-          </button>
-        </form>
-      </div>
-      {children}
+      <ShopNav slug={slug} />
+      {/* Content sits right of the fixed 232px rail on lg+; full-width under the mobile top bar. */}
+      <div className="lg:pl-[232px]">{children}</div>
     </div>
   );
 }

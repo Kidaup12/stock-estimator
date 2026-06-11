@@ -11,6 +11,9 @@ export type PositionRowInput = {
   title: string;
   sku: string;
   abc: Abc | null;
+  vendor: string | null;
+  supplierName: string | null;
+  importCategory: string | null;
   currentStock: number;
   onOrder: number;
   expectedArrivalAt: Date | string | null;
@@ -30,6 +33,9 @@ export type PositionRow = {
   productId: string;
   title: string;
   sku: string;
+  vendor: string | null;
+  supplierName: string | null;
+  importCategory: string | null;
   runRate: number;
   openingOnHand: number;
   openingEstimated: boolean;
@@ -93,6 +99,9 @@ export function buildPositionView(input: PositionInput): PositionView {
       productId: r.productId,
       title: r.title,
       sku: r.sku,
+      vendor: r.vendor,
+      supplierName: r.supplierName,
+      importCategory: r.importCategory,
       runRate,
       openingOnHand,
       openingEstimated,

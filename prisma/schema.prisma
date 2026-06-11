@@ -66,6 +66,7 @@ model Product {
   expectedArrivalAt DateTime?
   receivedAt        DateTime?
   leadTimeDays      Int?      // per-product lead-time override (days); null → supplier default
+  importCategory    String?   // "LOCAL" | "KOREAN" | "WESTERN"; null = unclassified (treated LOCAL)
 
   tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   supplier           Supplier?          @relation(fields: [supplierId], references: [id], onDelete: SetNull)
@@ -79,6 +80,7 @@ model Product {
   @@index([tenantId])
   @@index([tenantId, productType])
   @@index([tenantId, vendor])
+  @@index([tenantId, importCategory])
 }
 
 model SalesHistory {

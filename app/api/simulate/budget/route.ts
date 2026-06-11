@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { leadDaysFor } from "@/lib/forecast/category";
 import { z } from "zod";
 
 const schema = z.object({
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
       daysUntilStockout: p.daysUntilStockout,
       urgency: p.urgency,
       supplierName: p.product.supplier?.name ?? null,
+      importCategory: p.product.importCategory,
+      // For the order-sheet CSV: when stock would land if ordered today.
+      leadDays: leadDaysFor(p.product, p.product.supplier),
       cost,
       revenue,
       margin,

@@ -13,30 +13,6 @@ type ShopInfo = {
   hasToken: boolean;
 } | null;
 
-type MonthlyContext = {
-  id?: string;
-  month: string;
-  marketingBudget: number | null;
-  promotions: string | null;
-  seasonalExpectation: string | null;
-  cashFlow: string | null;
-  notes: string | null;
-};
-
-function currentMonth(): string {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-const emptyContext: MonthlyContext = {
-  month: currentMonth(),
-  marketingBudget: null,
-  promotions: "",
-  seasonalExpectation: "",
-  cashFlow: "",
-  notes: "",
-};
-
 export default function SettingsPage() {
   const { slug } = useParams<{ slug: string }>();
   const [shop, setShop] = useState<ShopInfo>(null);
@@ -45,9 +21,6 @@ export default function SettingsPage() {
     shopifyDomain: "beautysquareke.co",
     shopifyAccessToken: "",
   });
-  const [context, setContext] = useState<MonthlyContext>(emptyContext);
-  const [savingContext, setSavingContext] = useState(false);
-  const [contextSaved, setContextSaved] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -59,47 +32,14 @@ export default function SettingsPage() {
 
   async function load() {
     setLoading(true);
-    const [shopRes, ctxRes] = await Promise.all([
-      apiFetch(slug, "/api/shop").then(r => r.json()),
-      apiFetch(slug, "/api/monthly-context").then(r => r.json()),
-    ]);
+    const shopRes = await apiFetch(slug, "/api/shop").then(r => r.json());
     if (shopRes) {
       setShop(shopRes);
       setForm(f => ({ ...f, name: shopRes.name, shopifyDomain: shopRes.shopifyDomain }));
     }
-    const cm = currentMonth();
-    const existing = ctxRes.contexts?.find((c: MonthlyContext) => c.month === cm);
-    setContext(existing || { ...emptyContext, month: cm });
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
-
-  async function saveContext() {
-    setSavingContext(true);
-    setContextSaved(null);
-    try {
-      const res = await apiFetch(slug, "/api/monthly-context", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...context,
-          marketingBudget: context.marketingBudget,
-          promotions: context.promotions || null,
-          seasonalExpectation: context.seasonalExpectation || null,
-          cashFlow: context.cashFlow || null,
-          notes: context.notes || null,
-        }),
-      });
-      if (res.ok) {
-        setContextSaved("Saved. Re-run forecasts to apply this month's context.");
-      } else {
-        const err = await res.json();
-        setContextSaved(`Error: ${err.error || "save failed"}`);
-      }
-    } finally {
-      setSavingContext(false);
-    }
-  }
 
   function update<K extends keyof typeof form>(k: K, v: string) {
     setForm({ ...form, [k]: v });
@@ -160,7 +100,7 @@ export default function SettingsPage() {
       const res = await apiFetch(slug, "/api/forecast/run", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { setForecastResult(`Error: ${data.error}`); return; }
-      setForecastResult(`Generated ${data.forecastsCreated} forecasts (Layer 1 SARIMA + Layer 2 XGBoost — both mock).`);
+      setForecastResult(`Generated ${data.forecastsCreated} forecasts (run-rate engine with category cover windows + safety cap).`);
     } catch (e) {
       setForecastResult(`Error: ${e instanceof Error ? e.message : "Forecast failed"}`);
     } finally {
@@ -170,18 +110,6 @@ export default function SettingsPage() {
 
   return (
     <main className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-canvas/90 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
-          <Link href={`/shop/${slug}/dashboard`} className="text-2xs uppercase tracking-wider text-mute hover:text-ink transition">
-            ← Dashboard
-          </Link>
-          <div className="flex items-baseline gap-2.5">
-            <div className="h-5 w-5 rounded-md bg-gradient-to-br from-accent-500 to-accent-700" />
-            <span className="text-sm font-semibold tracking-tight">Wezesha Restock OS</span>
-          </div>
-        </div>
-      </header>
-
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-7">
         <div className="mb-7">
           <div className="text-2xs uppercase tracking-wider text-mute">Configuration</div>
@@ -191,67 +119,13 @@ export default function SettingsPage() {
         <div className="card p-5 mb-4 bg-accent-50 border-accent-100">
           <div className="text-2xs uppercase tracking-wider text-accent-700 font-semibold">What you input vs. what&apos;s automatic</div>
           <ul className="text-sm text-ink-soft mt-3 space-y-1.5 leading-relaxed">
-            <li>· <strong>Automatic:</strong> daily catalogue + sales sync from Shopify, weekly forecast refresh (Mon 6am).</li>
-            <li>· <strong>You input monthly:</strong> the context form below (marketing spend, promos, cash flow, big events).</li>
-            <li>· <strong>You input occasionally:</strong> <Link href={`/shop/${slug}/suppliers`} className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href={`/shop/${slug}/promos`} className="text-accent-700 hover:underline">promo calendar</Link>, supplier-per-product on each product page.</li>
+            <li>· <strong>Automatic:</strong> daily catalogue + sales sync from Shopify, nightly forecast refresh.</li>
+            <li>· <strong>You input occasionally:</strong> <Link href={`/shop/${slug}/suppliers`} className="text-accent-700 hover:underline">suppliers</Link> (lead time + MOQ), <Link href={`/shop/${slug}/promos`} className="text-accent-700 hover:underline">promo calendar</Link>, product lead times + import category on the Products page.</li>
             <li>· <strong>One-time:</strong> Shopify connection + initial catalogue seed below.</li>
           </ul>
         </div>
 
         <div className="space-y-4">
-          <Section
-            title={`Monthly context — ${context.month}`}
-            description="5-minute monthly form. Feeds Layer 2 of the forecast. Lock it in on the 1st of each month."
-          >
-            <div className="grid sm:grid-cols-2 gap-4">
-              <Field
-                label="Marketing budget (KES)"
-                value={context.marketingBudget?.toString() ?? ""}
-                onChange={v => setContext({ ...context, marketingBudget: v ? parseFloat(v) : null })}
-                placeholder="e.g. 150000"
-                type="number"
-              />
-              <SelectField
-                label="Cash flow expectation"
-                value={context.cashFlow || ""}
-                onChange={v => setContext({ ...context, cashFlow: v })}
-                options={["", "tight", "normal", "flush"]}
-              />
-              <div className="sm:col-span-2">
-                <TextAreaField
-                  label="Promotions planned this month"
-                  value={context.promotions || ""}
-                  onChange={v => setContext({ ...context, promotions: v })}
-                  placeholder="e.g. Mid-month WhatsApp drop 15% off fragrance; Madaraka sitewide 20%"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <TextAreaField
-                  label="Seasonal expectation"
-                  value={context.seasonalExpectation || ""}
-                  onChange={v => setContext({ ...context, seasonalExpectation: v })}
-                  placeholder="e.g. School holidays starting mid-month, expect lower foot traffic; Mother's Day boost on skincare"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <TextAreaField
-                  label="Notes & big events"
-                  value={context.notes || ""}
-                  onChange={v => setContext({ ...context, notes: v })}
-                  placeholder="e.g. New influencer partnership launch; competitor 20% off going on"
-                />
-              </div>
-            </div>
-            {contextSaved && (
-              <ResultBanner ok={!contextSaved.startsWith("Error")} message={contextSaved} />
-            )}
-            <div className="mt-5">
-              <button onClick={saveContext} disabled={savingContext} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-                {savingContext ? "Saving…" : "Save monthly context"}
-              </button>
-            </div>
-          </Section>
-
           <Section
             title="Shopify connection"
             description="Leave the access token blank to use mock mode (scrapes the public storefront)."
@@ -293,7 +167,7 @@ export default function SettingsPage() {
 
           <Section
             title="Forecasts"
-            description="Runs Layer 1 (SARIMA mock) + Layer 2 (XGBoost mock) on every product. Recomputes safety stock and reorder points."
+            description="Re-runs the demand forecast for every product (recency-weighted run rate, category cover windows, 3× best-month safety cap). Recomputes safety stock and reorder points."
           >
             <button onClick={runForecast} disabled={forecasting || !shop} className="btn-accent w-full disabled:bg-mute disabled:hover:bg-mute">
               {forecasting ? "Running forecasts…" : "Generate / Re-run forecasts"}
@@ -350,40 +224,6 @@ function Field({ label, value, onChange, placeholder, type = "text" }: {
         placeholder={placeholder}
         className="input"
       />
-    </label>
-  );
-}
-
-function TextAreaField({ label, value, onChange, placeholder }: {
-  label: string; value: string; onChange: (v: string) => void; placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{label}</span>
-      <textarea
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={2}
-        className="input resize-y min-h-[64px]"
-      />
-    </label>
-  );
-}
-
-function SelectField({ label, value, onChange, options }: {
-  label: string; value: string; onChange: (v: string) => void; options: string[];
-}) {
-  return (
-    <label className="block">
-      <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{label}</span>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="input"
-      >
-        {options.map(o => <option key={o} value={o}>{o || "—"}</option>)}
-      </select>
     </label>
   );
 }

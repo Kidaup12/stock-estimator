@@ -77,4 +77,41 @@ describe("recommendedQty", () => {
     expect(r).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(r)).toBe(true);
   });
+
+  describe("coverDays (category order-cover window)", () => {
+    it("defaults to 30 — identical to legacy math when omitted", () => {
+      const base = { finalForecast30d: 100, safetyStock: 20, currentStock: 30, onOrder: 50 };
+      expect(recommendedQty(base)).toBe(recommendedQty({ ...base, coverDays: 30 }));
+    });
+
+    it("LOCAL 17d cover scales demand down (100/30*17=56.7 +20 -30 -0 = 47)", () => {
+      expect(recommendedQty({
+        finalForecast30d: 100,
+        safetyStock: 20,
+        currentStock: 30,
+        onOrder: 0,
+        coverDays: 17,
+      })).toBe(47);
+    });
+
+    it("import 21d cover (100/30*21=70 +20 -30 -0 = 60)", () => {
+      expect(recommendedQty({
+        finalForecast30d: 100,
+        safetyStock: 20,
+        currentStock: 30,
+        onOrder: 0,
+        coverDays: 21,
+      })).toBe(60);
+    });
+
+    it("still subtracts on-order under a cover window", () => {
+      expect(recommendedQty({
+        finalForecast30d: 100,
+        safetyStock: 0,
+        currentStock: 0,
+        onOrder: 60,
+        coverDays: 17, // 56.67 - 60 -> 0
+      })).toBe(0);
+    });
+  });
 });

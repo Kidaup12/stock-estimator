@@ -13,6 +13,7 @@ import {
 } from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
+import { leadDaysFor, coverDaysFor } from "@/lib/forecast/category";
 import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 import { snapshotInventory } from "@/lib/inventory/snapshot";
 import { forecastDemandViaSidecar } from "@/lib/forecast/sidecar-client";
@@ -80,8 +81,8 @@ export async function runForecastsForTenant(
     currentStock: p.currentStock,
     abcCategory: abcMap[p.id] ?? "C",
     history: historyByProduct.get(p.id) ?? [],
-    // Per-product lead time wins; fall back to supplier, then 30±7 default.
-    leadTimeAvg: p.leadTimeDays ?? p.supplier?.leadTimeAvgDays ?? 30,
+    // Precedence: per-product override → supplier → import-category default → 30.
+    leadTimeAvg: leadDaysFor(p, p.supplier),
     leadTimeStd: p.supplier?.leadTimeStdDays ?? 7,
     activePromos: promosShaped,
     runDateKey,
@@ -115,6 +116,8 @@ export async function runForecastsForTenant(
       safetyStock: result.safetyStock,
       currentStock: p.currentStock,
       onOrder: p.onOrder,
+      // Category order-cover window: LOCAL 17d, KOREAN/WESTERN 21d, unclassified 30d.
+      coverDays: coverDaysFor(p),
     });
 
     await prisma.product.update({ where: { id: p.id }, data: { abcCategory: abc } });
