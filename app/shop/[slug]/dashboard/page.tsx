@@ -73,6 +73,17 @@ const KESshort = (n: number) => {
   return n.toFixed(0);
 };
 
+/** Human "N min ago" from an ISO timestamp — for the buy-list freshness stamp. */
+function relativeTime(iso: string | null): string {
+  if (!iso) return "";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
 type Tab = "reorder" | "stockout" | "dead" | "all" | "onway";
 
 export default function Dashboard() {
@@ -81,6 +92,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<Summary>(null);
   const [monthly, setMonthly] = useState<MonthlyRow[]>([]);
   const [shopName, setShopName] = useState("");
+  const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
@@ -91,15 +103,17 @@ export default function Dashboard() {
 
   async function load() {
     setLoading(true);
-    const [res, shop] = await Promise.all([
+    const [res, shop, status] = await Promise.all([
       apiFetch(slug, "/api/forecast"),
       apiFetch(slug, "/api/shop").then(r => (r.ok ? r.json() : null)).catch(() => null),
+      apiFetch(slug, "/api/shop/status").then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     const data = await res.json();
     setPredictions(data.predictions || []);
     setSummary(data.summary || null);
     setMonthly(data.monthlyRevenue || []);
     setShopName(shop?.name ?? "");
+    setLastRunAt(status?.forecast?.lastRunAt ?? null);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
@@ -168,9 +182,25 @@ export default function Dashboard() {
           <div>
             <div className="page-eyebrow">{shopName || " "}</div>
             <h1 className="page-title">Today&apos;s replenishment view</h1>
+            <p className="text-2xs text-mute mt-1">
+              {lastRunAt ? (
+                <>Buy list updated <span className="num">{relativeTime(lastRunAt)}</span> · refreshes automatically after each sync</>
+              ) : (
+                <>Buy list refreshes automatically after each sync</>
+              )}
+            </p>
           </div>
-          <button onClick={rerun} disabled={busy} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-            {busy ? "Running…" : "Re-run forecasts"}
+          <button
+            onClick={rerun}
+            disabled={busy}
+            title="Refresh now — recompute from the latest sales & stock"
+            aria-label="Refresh buy list now"
+            className="btn-ghost h-9 w-9 p-0 grid place-items-center disabled:opacity-50"
+          >
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={busy ? "animate-spin" : ""} aria-hidden="true">
+              <path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" />
+              <path d="M13.8 2.4V5h-2.6" />
+            </svg>
           </button>
         </div>
 

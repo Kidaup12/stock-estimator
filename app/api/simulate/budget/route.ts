@@ -9,6 +9,9 @@ const schema = z.object({
   // Either or both: budget caps spend, coverDays sizes the need.
   budgetKes: z.number().positive().optional(),
   coverDays: z.number().int().min(1).max(120).optional(),
+  // Optional focus: narrow the buy list to one category or brand.
+  scope: z.enum(["all", "category", "brand"]).optional(),
+  scopeValue: z.string().optional(),
 }).refine((v) => v.budgetKes != null || v.coverDays != null, {
   message: "Provide budgetKes, coverDays, or both",
 });
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { budgetKes, coverDays } = parsed.data;
+  const { budgetKes, coverDays, scope, scopeValue } = parsed.data;
 
   const auth = await requireTenantOrResponse();
   if (auth instanceof NextResponse) return auth;
@@ -58,8 +61,15 @@ export async function POST(req: NextRequest) {
   const rateByProduct = new Map(sales30.map(s => [s.productId, (s._sum.quantity ?? 0) / 30]));
 
   // Score each pending reorder.
+  const scopeV = scope && scope !== "all" && scopeValue ? scopeValue.toUpperCase() : null;
   const scored = predictions
     .filter(p => !orderedSet.has(p.productId))
+    .filter(p => {
+      if (!scopeV) return true; // "all" or no focus → no narrowing
+      if (scope === "category") return (p.product.productType ?? "").toUpperCase() === scopeV;
+      if (scope === "brand") return (p.product.vendor ?? "").toUpperCase() === scopeV;
+      return true;
+    })
     .filter(p => (rateByProduct.get(p.productId) ?? 0) > 0) // no run rate -> nothing to restock
     .map(p => {
       const rate = rateByProduct.get(p.productId) ?? 0;

@@ -102,6 +102,9 @@ export default function RestockPlannerPage() {
   const [daysInput, setDaysInput] = useState<string>("");
   const [budgetResult, setBudgetResult] = useState<BudgetResult | null>(null);
   const [runningBudget, setRunningBudget] = useState(false);
+  // Optional focus for the allocator (mirrors the shock tool): narrow to a category/brand.
+  const [budgetScope, setBudgetScope] = useState<"all" | "category" | "brand">("all");
+  const [budgetScopeValue, setBudgetScopeValue] = useState<string>("");
   // Row selection for the bulk actions (productIds; default = every "Buy now" row).
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [ordering, setOrdering] = useState(false);
@@ -128,7 +131,12 @@ export default function RestockPlannerPage() {
     const res = await apiFetch(slug, "/api/simulate/budget", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ budgetKes, coverDays }),
+      body: JSON.stringify({
+        budgetKes,
+        coverDays,
+        scope: budgetScope,
+        scopeValue: budgetScope === "all" ? undefined : (budgetScopeValue || undefined),
+      }),
     });
     const data: BudgetResult = await res.json();
     setBudgetResult(data);
@@ -291,6 +299,29 @@ export default function RestockPlannerPage() {
                 ))}
               </div>
             </label>
+            <label className="block">
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Focus — optional</span>
+              <select
+                value={budgetScope}
+                onChange={e => { setBudgetScope(e.target.value as "all" | "category" | "brand"); setBudgetScopeValue(""); }}
+                className="input w-36"
+              >
+                <option value="all">All products</option>
+                <option value="category">Category</option>
+                <option value="brand">Brand</option>
+              </select>
+            </label>
+            {budgetScope !== "all" && (
+              <label className="block">
+                <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">{budgetScope}</span>
+                <select value={budgetScopeValue} onChange={e => setBudgetScopeValue(e.target.value)} className="input w-44">
+                  <option value="">Pick {budgetScope}…</option>
+                  {(budgetScope === "category" ? facets.categories : facets.brands).slice(0, 100).map(f => (
+                    <option key={f.name} value={f.name}>{f.name} ({f.count})</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               onClick={runBudget}
               disabled={runningBudget || (!budgetInput.trim() && !daysInput.trim())}
@@ -305,12 +336,13 @@ export default function RestockPlannerPage() {
 
           {budgetResult && (
             <div className="mt-6 space-y-4">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-line border border-line rounded-2xl overflow-hidden">
-                <Kpi label="Items selected" value={`${budgetResult.selectedCount}`} hint={`KES ${KESshort(budgetResult.selectedCostKes)} of budget used`} />
-                <Kpi label="Expected revenue" value={`KES ${KESshort(budgetResult.selectedRevenueKes)}`} hint={`Margin KES ${KESshort(budgetResult.selectedMarginKes)}`} />
-                <Kpi label="Items deferred" value={`${budgetResult.deferredCount}`} hint={`${budgetResult.deferredAtRisk} at stockout risk`} tone={budgetResult.deferredAtRisk > 0 ? "warn" : "default"} />
-                <Kpi label="Revenue at risk" value={`KES ${KESshort(budgetResult.deferredAtRiskRevenueKes)}`} hint="If deferred items stock out" tone={budgetResult.deferredAtRiskRevenueKes > 100000 ? "warn" : "default"} />
-              </div>
+              <PlanSummary
+                result={budgetResult}
+                budgetInput={budgetInput}
+                daysInput={daysInput}
+                scope={budgetScope}
+                scopeValue={budgetScopeValue}
+              />
               {budgetResult.criticalOverflowKes > 0 && (
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900">
                   Critical SKUs overflow your budget by <strong>KES {KESshort(budgetResult.criticalOverflowKes)}</strong>. They&apos;re still included — you may want to raise the budget or accept some stockouts.
@@ -491,6 +523,54 @@ export default function RestockPlannerPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Plain-sentence answer for the budget allocator — speaks the owner's language
+ * ("With KES 800k covering 14 days, you can fully stock 38 of 47…") instead of a
+ * grid of statistician's tiles.
+ */
+function PlanSummary({ result, budgetInput, daysInput, scope, scopeValue }: {
+  result: BudgetResult;
+  budgetInput: string;
+  daysInput: string;
+  scope: "all" | "category" | "brand";
+  scopeValue: string;
+}) {
+  const total = result.selectedCount + result.deferredCount;
+  const budgetKes = budgetInput.trim() ? parseFloat(budgetInput) : null;
+  const days = daysInput.trim() ? parseInt(daysInput, 10) : null;
+  const focus = scope !== "all" && scopeValue ? ` ${scopeValue}` : "";
+  const lead =
+    budgetKes != null
+      ? `With KES ${KESshort(budgetKes)}${days ? ` covering ${days} days` : ""}`
+      : days
+        ? `To cover the next ${days} days`
+        : "Across your catalogue";
+  // Most urgent deferred item = fewest days of stock left.
+  const mostUrgent = [...result.deferred].sort((a, b) => a.daysUntilStockout - b.daysUntilStockout)[0];
+  return (
+    <div className="p-5 rounded-2xl border border-line bg-canvas-raised">
+      <p className="text-base text-ink leading-relaxed">
+        {lead}, you can fully stock <span className="font-semibold num">{result.selectedCount}</span> of{" "}
+        <span className="font-semibold num">{total}</span>{focus} item{total === 1 ? "" : "s"} — expected revenue{" "}
+        <span className="font-semibold num">KES {KESshort(result.selectedRevenueKes)}</span> (margin KES {KESshort(result.selectedMarginKes)}).
+        {result.deferredCount > 0 && (
+          <>
+            {" "}These <span className="font-semibold num">{result.deferredCount}</span> don&apos;t fit
+            {mostUrgent ? (
+              <> — the most urgent is <span className="font-medium">{mostUrgent.title}</span> (<span className="num">{mostUrgent.daysUntilStockout}d</span> left)</>
+            ) : null}.
+          </>
+        )}
+      </p>
+      {result.deferredAtRisk > 0 && (
+        <p className="text-2xs text-status-warn mt-2">
+          {result.deferredAtRisk} deferred item{result.deferredAtRisk === 1 ? "" : "s"} at stockout risk · KES {KESshort(result.deferredAtRiskRevenueKes)} revenue at risk.
+        </p>
+      )}
+    </div>
   );
 }
 
