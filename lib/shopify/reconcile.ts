@@ -5,6 +5,7 @@
  * resource next run. Then snapshots inventory + re-forecasts.
  */
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import {
   fetchProductsSince,
   fetchOrdersSince,
@@ -13,7 +14,6 @@ import {
 import {
   upsertProductFromShopify,
   upsertLocationFromShopify,
-  upsertInventoryLevel,
   type ShopifyProductNode,
   type ShopifyLocationNode,
   type ShopifyOrderNode,
@@ -120,29 +120,41 @@ export async function reconcileTenant(
   // so a product absent from the on_hand data has ZERO sellable stock — reset it,
   // don't leave a stale inflated currentStock. Same for en-route → onOrder. Without
   // this, sold-out SKUs keep old values and currentStock drifts way above reality.
+  //
+  // BATCHED via VALUES join: the old per-product update was ~2,000 round-trips,
+  // which (with serverless→EU-Postgres latency) blew Vercel's 300s maxDuration.
   const known = await prisma.product.findMany({
     where: { tenantId },
     select: { id: true, shopifyProductId: true },
   });
   for (const k of known) {
     if (!productIdByGid.has(k.shopifyProductId)) productIdByGid.set(k.shopifyProductId, k.id);
-    await prisma.product.update({
-      where: { id: k.id },
-      data: {
-        currentStock: onHandByGid.get(k.shopifyProductId) ?? 0,
-        onOrder: Math.round(enrouteByGid.get(k.shopifyProductId) ?? 0),
-      },
-    });
+  }
+  const CHUNK = 500;
+  for (let i = 0; i < known.length; i += CHUNK) {
+    const chunk = known.slice(i, i + CHUNK);
+    const tuples = chunk.map((k) =>
+      Prisma.sql`(${k.id}, ${onHandByGid.get(k.shopifyProductId) ?? 0}::float8, ${Math.round(enrouteByGid.get(k.shopifyProductId) ?? 0)}::int)`
+    );
+    await prisma.$executeRaw`
+      UPDATE "Product" AS p
+      SET "currentStock" = v.stock, "onOrder" = v.onorder
+      FROM (VALUES ${Prisma.join(tuples)}) AS v(id, stock, onorder)
+      WHERE p.id = v.id AND p."tenantId" = ${tenantId}`;
   }
   await setCursor(tenantId, "products", runStart);
 
   // Locations + inventory levels (primary = first ACTIVE SELLABLE location —
   // never the en-route/virtual buckets).
+  // Inventory levels are a FULL snapshot every run, so replace wholesale:
+  // delete + createMany (2 queries) instead of ~5,000 per-row upserts that
+  // previously dominated the sync's runtime.
   let inventoryLevels = 0;
   const primaryGid =
     locations.find((l) => l.isActive && isSellableLocation(l.name))?.id ??
     locations.find((l) => isSellableLocation(l.name))?.id ??
     null;
+  const levelByKey = new Map<string, { tenantId: string; locationId: string; productId: string; onHand: number }>();
   for (const loc of locations) {
     const locationId = await upsertLocationFromShopify(tenantId, loc, { isPrimary: loc.id === primaryGid });
     for (const level of loc.inventoryLevels ?? []) {
@@ -151,10 +163,16 @@ export async function reconcileTenant(
       const productId = productIdByGid.get(gid);
       if (!productId) continue;
       const onHand = level.quantities?.find((q) => q.name === "on_hand")?.quantity ?? 0;
-      await upsertInventoryLevel(tenantId, locationId, productId, onHand);
+      const key = `${locationId}:${productId}`;
+      const existing = levelByKey.get(key);
+      // Multiple variants of one product at one location sum into one row.
+      if (existing) existing.onHand += onHand;
+      else levelByKey.set(key, { tenantId, locationId, productId, onHand });
       inventoryLevels++;
     }
   }
+  await prisma.inventoryLevel.deleteMany({ where: { tenantId } });
+  await prisma.inventoryLevel.createMany({ data: [...levelByKey.values()] });
 
   // ── Reorder-tracking auto-clear ──────────────────────────────────────────────
   // Close active "ordered" markers when Shopify shows the goods landed: either the
