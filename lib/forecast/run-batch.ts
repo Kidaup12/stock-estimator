@@ -28,7 +28,7 @@ export async function runForecastsForTenant(
   timezone = "Africa/Nairobi"
 ): Promise<{ created: number; forecastRunId: string }> {
   const products = await prisma.product.findMany({
-    where: { tenantId },
+    where: { tenantId, active: true },
     include: { supplier: true },
   });
 

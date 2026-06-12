@@ -15,7 +15,7 @@ export async function POST() {
   const { tenant } = auth;
 
   const products = await prisma.product.findMany({
-    where: { tenantId: tenant.id },
+    where: { tenantId: tenant.id, active: true },
     include: { supplier: true },
   });
   if (products.length === 0) return NextResponse.json({ error: "No products. Seed first." }, { status: 400 });
