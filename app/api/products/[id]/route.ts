@@ -101,7 +101,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { tenant } = auth;
 
   const body = await req.json().catch(() => ({}));
-  const data: { supplierId?: string | null; leadTimeDays?: number | null; importCategory?: string | null } = {};
+  const data: {
+    supplierId?: string | null;
+    leadTimeDays?: number | null;
+    importCategory?: string | null;
+    active?: boolean;
+    activeOverride?: boolean;
+  } = {};
   if ("supplierId" in body) data.supplierId = typeof body.supplierId === "string" ? body.supplierId : null;
   if ("leadTimeDays" in body) {
     const n = Number.parseInt(body.leadTimeDays, 10);
@@ -111,6 +117,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const v = typeof body.importCategory === "string" ? body.importCategory.toUpperCase() : null;
     data.importCategory = v === "LOCAL" || v === "KOREAN" || v === "WESTERN" ? v : null; // anything else clears
   }
+  // Catalogue-truth overrides: "Keep active" sets both, so the next QB feed won't re-flag.
+  if ("active" in body) data.active = !!body.active;
+  if ("activeOverride" in body) data.activeOverride = !!body.activeOverride;
 
   // Tenant-scoped write (updateMany so the where carries tenantId).
   await prisma.product.updateMany({ where: { id, tenantId: tenant.id }, data });
