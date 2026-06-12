@@ -117,7 +117,7 @@ export async function reconcileTenant(
     where: { tenantId },
     select: { id: true, shopifyProductId: true },
   });
-  const productIdByGid = new Map<string, string>(known.map((k) => [k.shopifyProductId, k.id]));
+  const productIdByGid = new Map<string, string>(known.map((k) => [k.shopifyProductId!, k.id]));
 
   const mapNode = (node: ShopifyProductNode) => {
     const firstVariant = node.variants?.[0];
@@ -163,7 +163,7 @@ export async function reconcileTenant(
       where: { tenantId, shopifyProductId: { in: fresh.map((m) => m.shopifyProductId) } },
       select: { id: true, shopifyProductId: true },
     });
-    for (const r of freshRows) productIdByGid.set(r.shopifyProductId, r.id);
+    for (const r of freshRows) productIdByGid.set(r.shopifyProductId!, r.id);
   }
 
   const UPSERT_CHUNK = 250;
@@ -208,13 +208,13 @@ export async function reconcileTenant(
     select: { id: true, shopifyProductId: true },
   });
   for (const k of allKnown) {
-    if (!productIdByGid.has(k.shopifyProductId)) productIdByGid.set(k.shopifyProductId, k.id);
+    if (!productIdByGid.has(k.shopifyProductId!)) productIdByGid.set(k.shopifyProductId!, k.id);
   }
   const CHUNK = 500;
   for (let i = 0; i < allKnown.length; i += CHUNK) {
     const chunk = allKnown.slice(i, i + CHUNK);
     const tuples = chunk.map((k) =>
-      Prisma.sql`(${k.id}, ${onHandByGid.get(k.shopifyProductId) ?? 0}::float8, ${Math.round(enrouteByGid.get(k.shopifyProductId) ?? 0)}::int)`
+      Prisma.sql`(${k.id}, ${onHandByGid.get(k.shopifyProductId!) ?? 0}::float8, ${Math.round(enrouteByGid.get(k.shopifyProductId!) ?? 0)}::int)`
     );
     await prisma.$executeRaw`
       UPDATE "Product" AS p

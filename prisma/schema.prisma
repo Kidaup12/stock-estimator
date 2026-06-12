@@ -16,6 +16,7 @@ model Tenant {
   shopifyDomain      String?  @unique
   shopifyAccessToken String?
   currency           String   @default("KES")
+  source             String   @default("shopify") // "shopify" | "odoo"
   createdAt          DateTime @default(now())
 
   products           Product[]
@@ -27,6 +28,7 @@ model Tenant {
   monthlyContext     MonthlyContext[]
   memberships        Membership[]
   shopifyConnection  ShopifyConnection?
+  odooConnection     OdooConnection?
   locations          Location[]
   inventorySnapshots InventorySnapshot[]
   purchaseOrders     PurchaseOrder[]
@@ -48,8 +50,10 @@ model Membership {
 model Product {
   id                String    @id @default(cuid())
   tenantId          String
-  shopifyProductId  String
-  shopifyVariantId  String
+  shopifyProductId  String?   // nullable: Odoo rows carry externalId+source instead
+  shopifyVariantId  String?
+  externalId        String?   // provider record id (Odoo product.product id, etc.)
+  source            String    @default("shopify") // "shopify" | "odoo"
   sku               String
   title             String
   vendor            String?
@@ -77,7 +81,9 @@ model Product {
   purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([tenantId, shopifyProductId])
+  @@unique([tenantId, source, externalId])
   @@index([tenantId])
+  @@index([tenantId, source])
   @@index([tenantId, productType])
   @@index([tenantId, vendor])
   @@index([tenantId, importCategory])
@@ -244,10 +250,26 @@ model ShopifyConnection {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
+model OdooConnection {
+  id           String    @id @default(cuid())
+  tenantId     String    @unique
+  baseUrl      String // https://store.odoo.com
+  database     String
+  username     String
+  apiKey       String // AES-256-GCM ciphertext (encrypt()/decrypt())
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  disabledAt   DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
 model Location {
   id                String  @id @default(cuid())
   tenantId          String
-  shopifyLocationId String
+  shopifyLocationId String?
+  externalId        String?
+  source            String  @default("shopify")
   name              String
   isPrimary         Boolean @default(false)
 
@@ -255,6 +277,7 @@ model Location {
   inventoryLevels InventoryLevel[]
 
   @@unique([tenantId, shopifyLocationId])
+  @@unique([tenantId, source, externalId])
   @@index([tenantId])
 }
 
