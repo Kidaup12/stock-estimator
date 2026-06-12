@@ -27,27 +27,32 @@ export async function syncOdooTenant(tenantId: string, opts: { sinceDays?: numbe
 
   const ingest = await ingestOdooTenant(tenantId, cfg, { sinceDays: opts.sinceDays ?? 180 });
 
-  // currentStock = sum of on_hand across internal locations (stock.quant).
+  // currentStock = Odoo's VIRTUAL available per variant (on_hand + incoming −
+  // reserved). The owner counts committed/incoming stock as real (Mary, feedback
+  // 2026-06-12), and for restock math incoming legitimately reduces what to reorder.
+  // Odoo sync writes ONLY currentStock (onOrder stays 0 here), so there is no
+  // double-count with the onOrder subtraction in the forecast.
+  // GATE: validate against the live instance before relying on it — the prior
+  // on_hand sum showed a ~1,310-vs-9 gap whose root cause (UoM / locations /
+  // duplicate variants) may be independent of this field choice.
   const client = new OdooClient(cfg);
-  const quants = await client.searchReadAll<{ product_id: [number, string] | false; quantity: number }>(
-    "stock.quant",
-    [["location_id.usage", "=", "internal"]],
-    ["product_id", "quantity", "location_id"]
+  const variants = await client.searchReadAll<{ id: number; virtual_available: number }>(
+    "product.product",
+    [["active", "=", true]],
+    ["id", "virtual_available"]
   );
-  const onHand = new Map<string, number>();
-  for (const q of quants) {
-    if (!Array.isArray(q.product_id)) continue;
-    const ext = String(q.product_id[0]);
-    onHand.set(ext, (onHand.get(ext) ?? 0) + (q.quantity ?? 0));
+  const stockByExternal = new Map<string, number>();
+  for (const v of variants) {
+    stockByExternal.set(String(v.id), v.virtual_available ?? 0);
   }
   const dbProducts = await prisma.product.findMany({
     where: { tenantId, source: "odoo" },
     select: { id: true, externalId: true },
   });
   for (const p of dbProducts) {
-    await prisma.product.update({ where: { id: p.id }, data: { currentStock: onHand.get(p.externalId!) ?? 0 } });
+    await prisma.product.update({ where: { id: p.id }, data: { currentStock: stockByExternal.get(p.externalId!) ?? 0 } });
   }
 
   const fc = await runForecastsForTenant(tenantId, tenant.timezone);
-  return { ingest, productsStocked: dbProducts.length, quants: quants.length, forecastsCreated: fc.created };
+  return { ingest, productsStocked: dbProducts.length, quants: variants.length, forecastsCreated: fc.created };
 }

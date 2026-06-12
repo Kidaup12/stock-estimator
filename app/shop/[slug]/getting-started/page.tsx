@@ -21,9 +21,9 @@ export default async function GettingStartedPage({
           <div className="text-2xs uppercase tracking-wider text-mute">Getting started</div>
           <h1 className="text-xl font-semibold tracking-tight mt-0.5">How Wezesha works</h1>
           <p className="text-sm text-ink-soft mt-2 leading-relaxed max-w-prose">
-            Wezesha tells you what to reorder this week, how much, and from which supplier — then
-            builds the purchase order for you. Most of the data flows in on its own. Here&apos;s the
-            full picture so you know exactly what&apos;s automatic and what needs you.
+            Wezesha tells you what to reorder this week and how much — then builds the order sheet
+            for you. Most of the data flows in on its own. Here&apos;s the full picture so you know
+            exactly what&apos;s automatic and what needs you.
           </p>
         </div>
 
@@ -68,13 +68,11 @@ export default async function GettingStartedPage({
               </Item>
               <Item>A quick stock-count check on your top sellers</Item>
               <Item>
-                <Link href={`${base}/suppliers`} className="text-accent-700 hover:underline">
-                  Suppliers
-                </Link>{" "}
-                — who you buy from, which products map to them, and rough lead times
+                Each product&apos;s <span className="text-ink">import category</span> (Local, Korean,
+                Western) — this sets the lead time: local restocks in days, imports in weeks
               </Item>
               <Item>Pack sizes / minimum order quantities for your top movers</Item>
-              <Item>Your last few months of past orders (what, when, from whom)</Item>
+              <Item>Your last few months of past orders (what and when)</Item>
               <Item>A &ldquo;kill list&rdquo; of dead or discontinued products</Item>
               <Item>Shelf-life by category (e.g. skincare 12 months, makeup 18 months)</Item>
               <Item>
@@ -103,8 +101,8 @@ export default async function GettingStartedPage({
                 </Link>{" "}
                 to the calendar when you plan them
               </Item>
-              <Item>Set cost, supplier and pack size for new products as you add them</Item>
-              <Item>Update a lead time if a supplier changes — rare</Item>
+              <Item>Set cost and import category for new products as you add them</Item>
+              <Item>Update a lead time if shipping changes — rare</Item>
             </ul>
           </Step>
         </div>
@@ -115,7 +113,7 @@ export default async function GettingStartedPage({
             Every number is built the same way, so you can trust it:
           </p>
           <div className="mt-4 rounded-xl border border-line bg-canvas-tint px-4 py-3 text-sm text-ink-soft leading-relaxed">
-            recent sales rate × supplier lead time
+            recent sales rate × lead time
             <span className="text-mute"> + </span>
             safety stock
             <span className="text-mute"> − </span>
@@ -125,16 +123,15 @@ export default async function GettingStartedPage({
           </div>
           <p className="text-sm text-ink-soft mt-3 leading-relaxed max-w-prose">
             The sales rate is weighted toward recent weeks and adjusted for paydays, public holidays,
-            and any promos you&apos;ve entered. Safety stock grows with how unpredictable a
-            supplier&apos;s lead time is. Every recommendation shows its reasoning so you can see why.
+            and any promos you&apos;ve entered. Safety stock grows with how unpredictable the lead
+            time is. Every recommendation shows its reasoning so you can see why.
           </p>
         </section>
 
         <section className="card p-6 mt-4 bg-accent-50 border-accent-100">
           <h2 className="text-base font-semibold tracking-tight text-accent-700">Ready to check your setup?</h2>
           <p className="text-sm text-ink-soft mt-1.5 leading-relaxed">
-            Settings shows live status for your shop — what&apos;s connected, cost coverage, suppliers
-            and more.
+            Settings shows live status for your shop — what&apos;s connected, cost coverage and more.
           </p>
           <div className="mt-4 flex gap-2 flex-wrap">
             <Link href={`${base}/settings`} className="btn-accent">Go to Settings</Link>

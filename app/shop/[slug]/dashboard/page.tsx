@@ -247,6 +247,23 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Restock Planner is the core action — make it the first thing an owner reaches for. */}
+        {owner && (
+          <Link
+            href={`/shop/${slug}/restock-planner`}
+            className="card p-5 mb-6 flex items-center justify-between gap-4 border-accent-200 bg-accent-50 hover:bg-accent-100/70 transition-colors group"
+          >
+            <div className="min-w-0">
+              <div className="text-2xs uppercase tracking-wider text-accent-700">Ready to order</div>
+              <h2 className="text-base font-semibold tracking-tight mt-0.5">Plan my restock</h2>
+              <p className="text-sm text-ink-soft mt-1 max-w-xl">
+                Tell me your budget — get the smartest restock list for that money, then mark it ordered.
+              </p>
+            </div>
+            <span className="btn-accent shrink-0 group-hover:translate-x-0.5 transition-transform">Open planner →</span>
+          </Link>
+        )}
+
         <SpotCheckCard />
 
         {/* Monthly revenue chart */}
@@ -418,12 +435,6 @@ function SetupChecklist({ slug, onRun, busy }: { slug: string; onRun: () => void
       label: "Add cost prices",
       detail: total === 0 ? "needed for the buy math" : `${withCost} / ${total} priced — the rest are excluded`,
       href: `/shop/${slug}/products`,
-    },
-    {
-      done: (s?.suppliers.count ?? 0) > 0,
-      label: "Add suppliers",
-      detail: (s?.suppliers.count ?? 0) > 0 ? `${s?.suppliers.count} set` : "lead times + MOQ per supplier",
-      href: `/shop/${slug}/suppliers`,
     },
   ];
   const readyToRun = total > 0 && withCost > 0;

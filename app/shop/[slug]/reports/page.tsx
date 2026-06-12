@@ -7,7 +7,6 @@ import { apiFetch } from "@/lib/api-fetch";
 
 type Monthly = { month: string; quantity: number; revenueKes: number };
 type Slice = { name: string; revenue: number; qty: number; count: number };
-type SupplierSlice = { name: string; revenue: number; stockCost: number; stockRetail: number; stockValue: number; count: number; leadAvg: number; country: string | null };
 type Mover = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; revenue30: number; qty30: number; stock: number };
 type Slow = { id: string; title: string; sku: string; vendor: string | null; productType: string | null; stock: number; stockValue: number; stockRetail: number };
 
@@ -15,7 +14,6 @@ type ReportsData = {
   monthly: Monthly[];
   byCategory: Slice[];
   byBrand: Slice[];
-  bySupplier: SupplierSlice[];
   topMovers: Mover[];
   slowMovers: Slow[];
   abcCounts: { A: number; B: number; C: number };
@@ -64,7 +62,6 @@ export default function ReportsPage() {
   const maxCategoryRev = Math.max(1, ...data.byCategory.map(c => c.revenue));
   const maxBrandRev = Math.max(1, ...data.byBrand.map(b => b.revenue));
   const totalAbc = data.abcCounts.A + data.abcCounts.B + data.abcCounts.C;
-  const totalSupplierExposure = data.bySupplier.reduce((s, x) => s + x.stockCost, 0);
 
   const last30 = data.monthly.slice(-1)[0];
   const prev30 = data.monthly.slice(-2, -1)[0];
@@ -169,7 +166,7 @@ export default function ReportsPage() {
           <summary className="px-5 py-4 cursor-pointer select-none flex items-center justify-between hover:bg-canvas transition list-none [&::-webkit-details-marker]:hidden">
             <div>
               <h2 className="text-base font-semibold tracking-tight">Revenue breakdowns</h2>
-              <p className="text-2xs text-mute mt-0.5">By category, brand and supplier exposure — open when you need them</p>
+              <p className="text-2xs text-mute mt-0.5">By category and brand — open when you need them</p>
             </div>
             <span className="text-mute text-sm transition-transform group-open:rotate-180">▾</span>
           </summary>
@@ -211,28 +208,6 @@ export default function ReportsPage() {
                     />
                   ))}
                 </div>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-4 flex items-end justify-between">
-                <div>
-                  <div className="text-2xs uppercase tracking-wider text-mute">Capital tied up by origin (at cost)</div>
-                  <h3 className="text-base font-semibold tracking-tight mt-0.5">Supplier exposure</h3>
-                </div>
-                <div className="text-2xs text-mute">Sum at cost: <span className="num text-ink-soft">KES {KESshort(totalSupplierExposure)}</span></div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-                {data.bySupplier.map((s, i) => (
-                  <BarRow
-                    key={s.name}
-                    label={`${s.name}`}
-                    pct={(s.stockCost / Math.max(1, totalSupplierExposure)) * 100}
-                    value={`KES ${KESshort(s.stockCost)}`}
-                    hint={`${s.count} SKUs · ${s.country || "—"} · lead ${s.leadAvg}d`}
-                    color={PALETTE[i % PALETTE.length]}
-                  />
-                ))}
               </div>
             </div>
           </div>

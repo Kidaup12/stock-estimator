@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { buildPositionView, type PositionRowInput, type Abc } from "@/lib/inventory/position";
 import { utcDayKey } from "@/lib/inventory/snapshot";
-import { leadDaysFor } from "@/lib/forecast/category";
+import { leadDaysFor, leadStdFor } from "@/lib/forecast/category";
 
 export async function GET(req: NextRequest) {
   const ctx = await requireTenantOrResponse();
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
     // Lead time precedence mirrors the forecast: product override → supplier avg → category default → 30.
     // Per-product lead has no std, so show a bare number (std null) instead of the supplier's "30±7".
     leadTimeAvgDays: leadDaysFor(p, p.supplier),
-    leadTimeStdDays: p.leadTimeDays != null ? null : (p.supplier?.leadTimeStdDays ?? null),
+    leadTimeStdDays: p.leadTimeDays != null ? null : leadStdFor(p, p.supplier),
     soldInWindow: soldByProduct.get(p.id) ?? 0,
     snapshotOnHand: openingByProduct.get(p.id) ?? null,
   }));

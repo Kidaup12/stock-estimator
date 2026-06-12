@@ -182,15 +182,15 @@ export default function RestockPlannerPage() {
 
   function downloadOrderSheet() {
     if (checkedItems.length === 0) return;
-    // Grouped by supplier so Mary can send each block straight to its supplier.
+    // Grouped by brand so each block can go straight to the brand's rep.
     const rows = [...checkedItems]
-      .sort((a, b) => (a.supplierName ?? "zzz").localeCompare(b.supplierName ?? "zzz") || a.title.localeCompare(b.title))
+      .sort((a, b) => (a.vendor ?? "zzz").localeCompare(b.vendor ?? "zzz") || a.title.localeCompare(b.title))
       .map(it => {
         const qty = Math.max(1, Math.ceil(it.recommendedQty));
         const unitCost = qty > 0 ? it.cost / it.recommendedQty : 0;
         const eta = new Date(Date.now() + it.leadDays * 86_400_000).toISOString().slice(0, 10);
         return [
-          it.supplierName ?? "Unassigned",
+          it.vendor ?? "Unbranded",
           it.sku,
           it.title,
           it.importCategory ?? "—",
@@ -201,7 +201,7 @@ export default function RestockPlannerPage() {
         ];
       });
     const csv = toCsv(
-      ["Supplier", "SKU", "Product", "Category", "Qty", "Unit cost (KES)", "Line total (KES)", "Est. arrival"],
+      ["Brand", "SKU", "Product", "Category", "Qty", "Unit cost (KES)", "Line total (KES)", "Est. arrival"],
       rows
     );
     saveTextFile(`order-sheet-${new Date().toISOString().slice(0, 10)}.csv`, csv);
@@ -486,7 +486,6 @@ export default function RestockPlannerPage() {
                   <thead className="text-left text-2xs uppercase tracking-wider text-mute bg-canvas">
                     <tr>
                       <th className="px-5 py-2 font-medium">Product</th>
-                      <th className="px-5 py-2 font-medium">Supplier</th>
                       <th className="px-5 py-2 font-medium text-right">Baseline</th>
                       <th className="px-5 py-2 font-medium text-right">Shocked</th>
                       <th className="px-5 py-2 font-medium text-right">Extra cost</th>
@@ -501,7 +500,6 @@ export default function RestockPlannerPage() {
                           <Link href={`/shop/${slug}/dashboard/product/${it.productId}`} className="font-medium hover:underline truncate block max-w-xs">{it.title}</Link>
                           <div className="text-2xs text-mute">{it.vendor || "—"} · {it.productType || "—"}</div>
                         </td>
-                        <td className="px-5 py-2.5 text-2xs text-ink-soft">{it.supplierName || "—"}</td>
                         <td className="px-5 py-2.5 text-right num">{it.baselineRecommend.toFixed(0)}</td>
                         <td className="px-5 py-2.5 text-right num font-semibold text-accent-700">{it.shockedRecommend.toFixed(0)}</td>
                         <td className="px-5 py-2.5 text-right num">KES {KESshort(it.extraCost)}</td>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { leadDaysFor, coverDaysFor, normalizeCategory, DEFAULT_LEAD_DAYS, COVER_DAYS } from "./category";
+import { leadDaysFor, leadStdFor, coverDaysFor, normalizeCategory, DEFAULT_LEAD_DAYS, DEFAULT_LEAD_STD_DAYS, COVER_DAYS } from "./category";
 
 describe("normalizeCategory", () => {
   it("accepts the three categories case-insensitively", () => {
@@ -32,6 +32,24 @@ describe("leadDaysFor precedence", () => {
   });
   it("leadTimeDays 0 is a valid explicit override (same-day)", () => {
     expect(leadDaysFor({ leadTimeDays: 0, importCategory: "KOREAN" }, { leadTimeAvgDays: 14 })).toBe(0);
+  });
+});
+
+describe("leadStdFor precedence", () => {
+  it("supplier std wins when present", () => {
+    expect(leadStdFor({ importCategory: "LOCAL" }, { leadTimeStdDays: 4 })).toBe(4);
+  });
+  it("category default applies when no supplier (suppliers removed)", () => {
+    expect(leadStdFor({ importCategory: "LOCAL" }, null)).toBe(DEFAULT_LEAD_STD_DAYS.LOCAL);
+    expect(leadStdFor({ importCategory: "KOREAN" }, undefined)).toBe(7);
+    expect(leadStdFor({ importCategory: "WESTERN" })).toBe(7);
+  });
+  it("local imports are the most predictable (±1)", () => {
+    expect(DEFAULT_LEAD_STD_DAYS.LOCAL).toBe(1);
+  });
+  it("unclassified falls back to legacy ±7", () => {
+    expect(leadStdFor({ importCategory: null })).toBe(7);
+    expect(leadStdFor({})).toBe(7);
   });
 });
 

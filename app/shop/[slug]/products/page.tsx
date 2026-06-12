@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api-fetch";
 
 type PositionRow = {
   productId: string; title: string; sku: string; runRate: number;
-  vendor: string | null; supplierName: string | null; importCategory: string | null;
+  vendor: string | null; importCategory: string | null;
   openingOnHand: number; openingEstimated: boolean; currentStock: number;
   onOrder: number; expectedArrivalAt: string | null;
   leadTimeAvgDays: number | null; leadTimeStdDays: number | null; daysOfCover: number | null;
@@ -156,8 +156,7 @@ export default function ProductsPage() {
       (r) =>
         r.title.toLowerCase().includes(q) ||
         r.sku.toLowerCase().includes(q) ||
-        (r.vendor ?? "").toLowerCase().includes(q) ||
-        (r.supplierName ?? "").toLowerCase().includes(q)
+        (r.vendor ?? "").toLowerCase().includes(q)
     );
   }, [position, cls, q]);
 
@@ -190,7 +189,7 @@ export default function ProductsPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, SKU, brand or supplier…"
+            placeholder="Search title, SKU or brand…"
             className="input max-w-xs"
           />
           <div className={`inline-flex rounded-xl border border-line bg-canvas-raised p-0.5 shadow-soft ${q ? "opacity-40 pointer-events-none" : ""}`}>
@@ -254,7 +253,6 @@ export default function ProductsPage() {
                     <th className="px-3 py-2.5 font-medium text-right">Opening</th>
                     <th className="px-3 py-2.5 font-medium text-right">On-hand</th>
                     <th className="px-3 py-2.5 font-medium text-right">En route</th>
-                    <th className="px-3 py-2.5 font-medium">Supplier</th>
                     <th className="px-3 py-2.5 font-medium text-right">Lead</th>
                     <th className="px-5 py-2.5 font-medium text-right">Days cover</th>
                   </tr>
@@ -282,7 +280,6 @@ export default function ProductsPage() {
                             </span>
                           ) : "—"}
                         </td>
-                        <td className="px-3 py-2.5 text-2xs text-ink-soft truncate max-w-[140px]">{r.supplierName ?? "—"}</td>
                         <td className="px-3 py-2.5 text-right">
                           <LeadCell slug={slug} productId={r.productId} value={r.leadTimeAvgDays} onSaved={loadPosition} />
                         </td>

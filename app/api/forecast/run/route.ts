@@ -4,6 +4,7 @@ import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { simulateLayeredForecast, type ActivePromo } from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
+import { leadDaysFor, leadStdFor } from "@/lib/forecast/category";
 import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 
 export const maxDuration = 120;
@@ -73,9 +74,9 @@ export async function POST() {
   for (const p of products) {
     const history = historyByProduct.get(p.id) ?? [];
     const supplier = p.supplier;
-    // Per-product lead time wins; fall back to supplier, then 30±7 default.
-    const leadAvg = p.leadTimeDays ?? supplier?.leadTimeAvgDays ?? 30;
-    const leadStd = supplier?.leadTimeStdDays ?? 7;
+    // Per-product override → supplier → import-category default. (Matches run-batch.)
+    const leadAvg = leadDaysFor(p, supplier);
+    const leadStd = leadStdFor(p, supplier);
     const abc = abcMap[p.id] ?? "C";
 
     const result = simulateLayeredForecast({

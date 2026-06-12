@@ -14,7 +14,7 @@ import {
 } from "@/lib/forecast/simulate-layers";
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
-import { leadDaysFor, coverDaysFor } from "@/lib/forecast/category";
+import { leadDaysFor, leadStdFor, coverDaysFor } from "@/lib/forecast/category";
 import { excludePromoDays, windowsForProduct, type PromoWindow } from "@/lib/forecast/promo-windows";
 import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 import { snapshotInventory } from "@/lib/inventory/snapshot";
@@ -101,7 +101,7 @@ export async function runForecastsForTenant(
       : historyByProduct.get(p.id) ?? [],
     // Precedence: per-product override → supplier → import-category default → 30.
     leadTimeAvg: leadDaysFor(p, p.supplier),
-    leadTimeStd: p.supplier?.leadTimeStdDays ?? 7,
+    leadTimeStd: leadStdFor(p, p.supplier),
     activePromos: promosShaped,
     runDateKey,
   }));

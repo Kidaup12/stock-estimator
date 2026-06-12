@@ -23,6 +23,16 @@ export const DEFAULT_LEAD_DAYS: Record<ImportCategory, number> = {
   WESTERN: 28,
 };
 
+/** Default lead-time variability (± days) per category, replacing the supplier's
+ *  leadTimeStdDays now that suppliers are gone. Local restock is predictable
+ *  (±1d); imports swing with shipping/customs (±7d). Feeds King's safety stock. */
+export const DEFAULT_LEAD_STD_DAYS: Record<ImportCategory, number> = {
+  LOCAL: 1,
+  KOREAN: 7,
+  WESTERN: 7,
+};
+const FALLBACK_LEAD_STD_DAYS = 7; // pre-category behavior, kept as the final net
+
 /** How many days of demand one order should cover. Local = 17 (2wk3d). */
 export const COVER_DAYS: Record<ImportCategory, number> = {
   LOCAL: 17,
@@ -50,6 +60,21 @@ export function leadDaysFor(
   if (supplier?.leadTimeAvgDays != null) return supplier.leadTimeAvgDays;
   const cat = normalizeCategory(product.importCategory);
   return cat ? DEFAULT_LEAD_DAYS[cat] : FALLBACK_LEAD_DAYS;
+}
+
+/**
+ * Lead-time STD: supplier std (inert post-removal — supplier is always null) →
+ * category default → 7. A per-product lead OVERRIDE only fixes the average lead,
+ * not its variability, so std stays category-driven — matching the prior behavior
+ * where std came from `supplier?.leadTimeStdDays ?? 7` regardless of any override.
+ */
+export function leadStdFor(
+  product: { importCategory?: string | null },
+  supplier?: { leadTimeStdDays?: number | null } | null
+): number {
+  if (supplier?.leadTimeStdDays != null) return supplier.leadTimeStdDays;
+  const cat = normalizeCategory(product.importCategory);
+  return cat ? DEFAULT_LEAD_STD_DAYS[cat] : FALLBACK_LEAD_STD_DAYS;
 }
 
 /** Order-cover window for the product's category. Unclassified → LOCAL's 17d

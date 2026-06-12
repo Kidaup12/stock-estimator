@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { canSeeMoney } from "@/lib/auth/money-visibility";
+import { leadDaysFor, leadStdFor } from "@/lib/forecast/category";
 import { z } from "zod";
 
 const schema = z.object({
@@ -65,8 +66,8 @@ export async function POST(req: NextRequest) {
     if (newRecommend > 0) shockedReorderCount++;
 
     // Lead time feasibility
-    const leadAvg = p.product.supplier?.leadTimeAvgDays ?? 30;
-    const leadStd = p.product.supplier?.leadTimeStdDays ?? 7;
+    const leadAvg = leadDaysFor(p.product, p.product.supplier);
+    const leadStd = leadStdFor(p.product, p.product.supplier);
     const leadP90 = leadAvg + 1.28 * leadStd; // 90th percentile lead
     const leadFeasible = leadP90 <= daysAhead;
     if (!leadFeasible && newRecommend > baselineRecommend) {

@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
+import { leadDaysFor, leadStdFor } from "@/lib/forecast/category";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -22,7 +23,7 @@ type Detail = {
     onOrder: number;
     expectedArrivalAt: string | null;
     leadTimeDays: number | null;
-    supplier: { id: string; name: string; leadTimeAvgDays: number; leadTimeStdDays: number } | null;
+    importCategory: string | null;
   };
   history: {
     byMonth: { month: string; quantity: number; revenueKes: number }[];
@@ -53,26 +54,21 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
 
   async function load() {
     setLoading(true);
-    const [d, s] = await Promise.all([
-      apiFetch(slug, `/api/products/${id}`).then(r => r.json()),
-      apiFetch(slug, "/api/suppliers").then(r => r.json()),
-    ]);
+    const d = await apiFetch(slug, `/api/products/${id}`).then(r => r.json());
     setData(d);
-    setSuppliers(s.suppliers || []);
     setLoading(false);
   }
 
   useEffect(() => { load(); }, [id]);
 
-  async function setSupplier(supplierId: string) {
+  async function setImportCategory(importCategory: string) {
     await apiFetch(slug, `/api/products/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supplierId: supplierId || null }),
+      body: JSON.stringify({ importCategory: importCategory || null }),
     });
     await load();
   }
@@ -99,6 +95,11 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
 
   const { product, history, prediction } = data;
   const maxMonthQty = Math.max(1, ...history.byMonth.map(m => m.quantity));
+  // Lead time now comes from the product's import-category tag (+ per-product override),
+  // not a supplier. categoryLead ignores any override; effectiveLead is what the forecast uses.
+  const categoryLead = leadDaysFor({ leadTimeDays: null, importCategory: product.importCategory });
+  const effectiveLead = leadDaysFor({ leadTimeDays: product.leadTimeDays, importCategory: product.importCategory });
+  const leadStd = leadStdFor({ importCategory: product.importCategory });
 
   return (
     <main className="min-h-screen bg-canvas">
@@ -165,35 +166,36 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
 
             <div className="space-y-1">
               <Row
-                label="Layer 1 — SARIMA baseline"
-                badge="mock"
+                label="Demand run rate"
                 value={`${prediction.layer1Forecast30d.toFixed(0)} units`}
-                hint={`confidence ${(prediction.layer1Confidence * 100).toFixed(0)}%`}
+                hint={`${(prediction.layer1Forecast30d / 30).toFixed(2)} units/day · 30/90/365-day blend`}
               />
-              <Row
-                label="Layer 2 — XGBoost adjustment"
-                badge="mock"
-                value={`${prediction.layer2Adjustment >= 0 ? "+" : ""}${prediction.layer2Adjustment.toFixed(0)} units`}
-                hint={prediction.layer2Adjustment >= 0 ? "boosts from signals below" : "headwinds from signals below"}
-              />
-
-              {prediction.signals.length > 0 && (
-                <div className="pl-4 flex flex-wrap gap-1.5 py-2">
-                  {prediction.signals.map((s, i) => (
-                    <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
-                      {s.emoji} {s.label}
-                    </span>
-                  ))}
-                </div>
+              {Math.round(prediction.layer2Adjustment) !== 0 && (
+                <>
+                  <Row
+                    label="Adjustments"
+                    value={`${prediction.layer2Adjustment >= 0 ? "+" : ""}${prediction.layer2Adjustment.toFixed(0)} units`}
+                    hint={prediction.signals.length > 0 ? undefined : "promo & cap effects"}
+                  />
+                  {prediction.signals.length > 0 && (
+                    <div className="pl-4 flex flex-wrap gap-1.5 py-1.5">
+                      {prediction.signals.map((s, i) => (
+                        <span key={i} className="text-2xs px-2 py-1 rounded-md bg-canvas-tint border border-line text-ink-soft">
+                          {s.emoji} {s.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="border-t border-dashed border-line my-3" />
 
-              <Row label="Final 30-day forecast" value={`${prediction.finalForecast30d.toFixed(0)} units`} bold />
+              <Row label="30-day forecast" value={`${prediction.finalForecast30d.toFixed(0)} units`} bold />
               <Row
                 label="Safety stock (King's formula)"
                 value={`+${prediction.safetyStock.toFixed(0)} units`}
-                hint={product.supplier ? `lead ${product.supplier.leadTimeAvgDays}d ± ${product.supplier.leadTimeStdDays}d` : "default lead 30d ± 7d"}
+                hint={`lead ${effectiveLead}d ± ${leadStd}d`}
               />
               <Row label="Reorder point" value={`${prediction.reorderPoint.toFixed(0)} units`} bold />
               <Row
@@ -211,8 +213,7 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
             </div>
 
             <div className="mt-3 text-2xs text-mute">
-              Layer 1 and Layer 2 outputs are simulated locally for UI development.
-              Real model service (Python + statsmodels + xgboost) plugs in at the same JSON shape.
+              Forecast = recency-weighted run rate, capped at 3× your best month.
             </div>
           </section>
         )}
@@ -241,28 +242,26 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
         <section className="card p-6">
           <div className="mb-4">
             <div className="text-2xs uppercase tracking-wider text-mute">Replenishment</div>
-            <h2 className="text-base font-semibold mt-1">Supplier</h2>
+            <h2 className="text-base font-semibold mt-1">Lead time</h2>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            <select
-              value={product.supplier?.id || ""}
-              onChange={e => setSupplier(e.target.value)}
-              className="input max-w-xs"
-            >
-              <option value="">— Default (30d ± 7d) —</option>
-              {suppliers.map(s => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <Link href={`/shop/${slug}/suppliers`} className="text-sm text-accent-700 hover:text-accent-800 hover:underline">
-              Manage suppliers
-            </Link>
+            <label className="block">
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Import category</span>
+              <select
+                value={product.importCategory ?? ""}
+                onChange={e => setImportCategory(e.target.value)}
+                className="input max-w-xs"
+              >
+                <option value="">Unclassified — 30d</option>
+                <option value="LOCAL">Local — ~7d</option>
+                <option value="KOREAN">Korean import — ~28d</option>
+                <option value="WESTERN">Western import — ~28d</option>
+              </select>
+            </label>
           </div>
-          {product.supplier && (
-            <div className="mt-3 text-sm text-ink-soft num">
-              Supplier lead time: {product.supplier.leadTimeAvgDays}d ± {product.supplier.leadTimeStdDays}d
-            </div>
-          )}
+          <div className="mt-3 text-sm text-ink-soft num">
+            Effective lead time: {effectiveLead}d ± {leadStd}d {product.leadTimeDays == null ? "(from category)" : "(override)"}
+          </div>
           <div className="mt-4 pt-4 border-t border-line">
             <label className="text-2xs uppercase tracking-wider text-mute" htmlFor="leadOverride">
               Lead time override (days)
@@ -275,12 +274,12 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
                 min={1}
                 inputMode="numeric"
                 defaultValue={product.leadTimeDays ?? ""}
-                placeholder={`default ${product.supplier?.leadTimeAvgDays ?? 30}`}
+                placeholder={`default ${categoryLead}`}
                 onBlur={e => setLeadTime(e.target.value)}
                 className="input max-w-[8rem]"
               />
               <span className="text-2xs text-mute">
-                Per-product. Blank = use supplier ({product.supplier?.leadTimeAvgDays ?? 30}d). Drives safety stock + reorder point.
+                Per-product. Blank = use the category default ({categoryLead}d). Drives safety stock + reorder point.
               </span>
             </div>
           </div>

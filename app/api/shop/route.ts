@@ -19,7 +19,18 @@ export async function GET() {
     shopifyDomain: tenant.shopifyDomain,
     currency: tenant.currency,
     hasToken: !!tenant.shopifyAccessToken,
+    source: tenant.source, // "shopify" | "odoo" — drives the adaptive Store card
   });
+}
+
+/** DELETE /api/shop — "Disconnect" the Shopify connection: clear the access token
+ *  (reverts to mock mode). Reversible: re-enter the token to reconnect. OWNER only. */
+export async function DELETE() {
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  if (auth.membership.role !== "OWNER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  await prisma.tenant.update({ where: { id: auth.tenant.id }, data: { shopifyAccessToken: null } });
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: NextRequest) {

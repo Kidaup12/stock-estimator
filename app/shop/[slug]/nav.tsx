@@ -76,14 +76,13 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
   // Restock Planner (budgets) + Settings are OWNER-only (Dave DoD §7).
   const workflow = [
     { href: `${base}/dashboard`, label: "Dashboard", icon: <IconGrid /> },
+    ...(owner ? [{ href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> }] : []),
     { href: `${base}/products`, label: "Products", icon: <IconBox /> },
     { href: `${base}/orders`, label: "Orders", icon: <IconTruck /> },
-    ...(owner ? [{ href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> }] : []),
     { href: `${base}/reports`, label: "Reports", icon: <IconChart /> },
   ];
   const setup = [
     { href: `${base}/getting-started`, label: "How it works", icon: <IconHelp /> },
-    { href: `${base}/suppliers`, label: "Suppliers", icon: <IconGlobe /> },
     { href: `${base}/promos`, label: "Promo calendar", icon: <IconTag /> },
     ...(owner ? [{ href: `${base}/settings`, label: "Settings", icon: <IconGear /> }] : []),
   ];
@@ -235,9 +234,6 @@ function IconWallet() {
 }
 function IconChart() {
   return <svg {...ic}><path d="M2 14h12M4 11V7M8 11V3.6M12 11V5.6" /></svg>;
-}
-function IconGlobe() {
-  return <svg {...ic}><circle cx="8" cy="8" r="6.2" /><path d="M1.8 8h12.4M8 1.8c1.8 1.7 2.7 3.8 2.7 6.2S9.8 12.5 8 14.2C6.2 12.5 5.3 10.4 5.3 8S6.2 3.5 8 1.8Z" /></svg>;
 }
 function IconTag() {
   return <svg {...ic}><path d="m8.6 1.9 5.5 5.5a1.5 1.5 0 0 1 0 2.1l-4.6 4.6a1.5 1.5 0 0 1-2.1 0L1.9 8.6V1.9h6.7Z" /><circle cx="5.2" cy="5.2" r="1" fill="currentColor" stroke="none" /></svg>;

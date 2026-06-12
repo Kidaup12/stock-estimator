@@ -63,3 +63,15 @@ export async function POST(req: NextRequest) {
   await prisma.tenant.update({ where: { id: tenant.id }, data: { source: "odoo" } });
   return NextResponse.json({ ok: true });
 }
+
+/** DELETE /api/odoo — "Disconnect" Odoo: soft-disable the connection (keeps creds
+ *  for easy reconnect) and revert the tenant to the Shopify source. OWNER only. */
+export async function DELETE() {
+  const auth = await requireTenantOrResponse();
+  if (auth instanceof NextResponse) return auth;
+  const { tenant } = auth;
+  if (auth.membership.role !== "OWNER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  await prisma.odooConnection.updateMany({ where: { tenantId: tenant.id }, data: { disabledAt: new Date() } });
+  await prisma.tenant.update({ where: { id: tenant.id }, data: { source: "shopify" } });
+  return NextResponse.json({ ok: true });
+}

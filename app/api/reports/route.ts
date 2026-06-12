@@ -14,7 +14,7 @@ export async function GET() {
   const last90 = new Date(today); last90.setUTCDate(last90.getUTCDate() - 90);
   const last365 = new Date(today); last365.setUTCFullYear(today.getUTCFullYear() - 1);
 
-  const [products, sales30, sales365, predictions, suppliers] = await Promise.all([
+  const [products, sales30, sales365, predictions] = await Promise.all([
     prisma.product.findMany({ where: { tenantId: tenant.id } }),
     prisma.salesHistory.groupBy({
       by: ["productId"],
@@ -26,12 +26,10 @@ export async function GET() {
       select: { productId: true, quantity: true, revenueKes: true, date: true },
     }),
     prisma.prediction.findMany({ where: { tenantId: tenant.id } }),
-    prisma.supplier.findMany({ where: { tenantId: tenant.id } }),
   ]);
 
   const sales30Map = new Map(sales30.map(s => [s.productId, { qty: s._sum.quantity ?? 0, rev: s._sum.revenueKes ?? 0 }]));
   const productById = new Map(products.map(p => [p.id, p]));
-  const supplierById = new Map(suppliers.map(s => [s.id, s]));
 
   // Monthly revenue & qty for last 13 months (revenue-only — gross profit dropped per Dave: cross-channel cost untrusted)
   const monthlyMap = new Map<string, { quantity: number; revenueKes: number }>();
@@ -76,24 +74,6 @@ export async function GET() {
     .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 12);
-
-  // By supplier — capital tied up AT COST (what we actually paid)
-  const bySupplierMap = new Map<string, { revenue: number; stockCost: number; stockRetail: number; count: number; leadAvg: number; country: string | null }>();
-  for (const p of products) {
-    if (!p.supplierId) continue;
-    const sup = supplierById.get(p.supplierId);
-    if (!sup) continue;
-    const s = sales30Map.get(p.id);
-    const existing = bySupplierMap.get(sup.name) || { revenue: 0, stockCost: 0, stockRetail: 0, count: 0, leadAvg: sup.leadTimeAvgDays, country: sup.country };
-    existing.revenue += s?.rev ?? 0;
-    existing.stockCost += p.currentStock * p.costKes;
-    existing.stockRetail += p.currentStock * p.priceKes;
-    existing.count += 1;
-    bySupplierMap.set(sup.name, existing);
-  }
-  const bySupplier = Array.from(bySupplierMap.entries())
-    .map(([name, v]) => ({ name, ...v, stockValue: v.stockCost }))
-    .sort((a, b) => b.stockCost - a.stockCost);
 
   // Top 10 movers by 30d revenue
   const topMovers = products
@@ -161,7 +141,6 @@ export async function GET() {
     monthly,
     byCategory,
     byBrand,
-    bySupplier,
     topMovers,
     slowMovers,
     abcCounts,

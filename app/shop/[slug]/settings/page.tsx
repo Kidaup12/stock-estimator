@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useIsOwner } from "@/lib/auth/role-context";
@@ -9,91 +9,25 @@ import { apiFetch } from "@/lib/api-fetch";
 type ShopInfo = {
   id: string;
   name: string;
-  shopifyDomain: string;
+  shopifyDomain: string | null;
   currency: string;
   hasToken: boolean;
+  source: "shopify" | "odoo";
 } | null;
 
 export default function SettingsPage() {
   const { slug } = useParams<{ slug: string }>();
   const owner = useIsOwner(); // Settings are OWNER-only (Dave §7)
   const [shop, setShop] = useState<ShopInfo>(null);
-  // Start empty — multi-tenant: never seed one shop's identity as the default.
-  // load() fills these from GET /api/shop for the resolved tenant.
-  const [form, setForm] = useState({
-    name: "",
-    shopifyDomain: "",
-    shopifyAccessToken: "",
-  });
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok?: boolean; message: string } | null>(null);
-  const [forecasting, setForecasting] = useState(false);
-  const [forecastResult, setForecastResult] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
-    const shopRes = await apiFetch(slug, "/api/shop").then(r => r.json());
-    if (shopRes) {
-      setShop(shopRes);
-      setForm(f => ({ ...f, name: shopRes.name, shopifyDomain: shopRes.shopifyDomain }));
-    }
+    const shopRes = await apiFetch(slug, "/api/shop").then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (shopRes) setShop(shopRes);
     setLoading(false);
   }
   useEffect(() => { load(); }, []);
-
-  function update<K extends keyof typeof form>(k: K, v: string) {
-    setForm({ ...form, [k]: v });
-  }
-
-  async function testConnection() {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await apiFetch(slug, "/api/shop/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shopifyDomain: form.shopifyDomain, shopifyAccessToken: form.shopifyAccessToken }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setTestResult({ ok: false, message: data.error || "Failed" }); return; }
-      setTestResult({ ok: true, message: `Connected to ${data.shopName}${data.mock ? " (mock mode)" : ""}` });
-    } catch (e) {
-      setTestResult({ ok: false, message: e instanceof Error ? e.message : "Network error" });
-    } finally {
-      setTesting(false);
-    }
-  }
-
-  async function saveShop() {
-    setSaving(true);
-    try {
-      const res = await apiFetch(slug, "/api/shop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (res.ok) await load();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function runForecast() {
-    setForecasting(true);
-    setForecastResult(null);
-    try {
-      const res = await apiFetch(slug, "/api/forecast/run", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) { setForecastResult(`Error: ${data.error}`); return; }
-      setForecastResult(`Generated ${data.forecastsCreated} forecasts (run-rate engine with category cover windows + safety cap).`);
-    } catch (e) {
-      setForecastResult(`Error: ${e instanceof Error ? e.message : "Forecast failed"}`);
-    } finally {
-      setForecasting(false);
-    }
-  }
 
   if (!owner) {
     return (
@@ -126,56 +60,18 @@ export default function SettingsPage() {
 
         <StatusGrid slug={slug} />
 
-
         <div className="space-y-4">
-          <Section
-            title="Shopify connection"
-            description="Leave the access token blank to use mock mode (scrapes the public storefront)."
-          >
-            <div className="grid gap-4">
-              <Field label="Shop name" value={form.name} onChange={v => update("name", v)} />
-              <Field label="Shopify domain" value={form.shopifyDomain} onChange={v => update("shopifyDomain", v)} placeholder="yourshop.co or yourshop.myshopify.com" />
-              <Field label="Admin API access token (optional)" value={form.shopifyAccessToken} onChange={v => update("shopifyAccessToken", v)} placeholder="shpat_…" type="password" />
-            </div>
-            {testResult && (
-              <ResultBanner ok={!!testResult.ok} message={testResult.message} />
-            )}
-            <div className="mt-5 flex gap-2 flex-wrap">
-              <button onClick={testConnection} disabled={testing || !form.shopifyDomain} className="btn-ghost disabled:opacity-50">
-                {testing ? "Testing…" : "Test connection"}
-              </button>
-              <button onClick={saveShop} disabled={saving || !form.shopifyDomain || !form.name} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-                {saving ? "Saving…" : shop ? "Update" : "Save"}
-              </button>
-            </div>
-            {shop && (
-              <div className="mt-4 text-2xs text-mute">
-                Connected as <span className="num text-ink-soft">{shop.shopifyDomain}</span> · {shop.currency} · {shop.hasToken ? "with token" : "mock mode"}
-              </div>
-            )}
-          </Section>
+          {/* A shop is EITHER Shopify OR Odoo — show only the one it uses. */}
+          {shop?.source === "odoo"
+            ? <OdooConnectionCard slug={slug} onChanged={load} />
+            : <ShopifyConnectionCard slug={slug} onChanged={load} />}
 
-          <OdooConnectionCard slug={slug} />
+          <CostUploadCard slug={slug} />
 
           <UsersSection slug={slug} />
 
-          <Section
-            title="Forecasts"
-            description="Re-runs the demand forecast for every product (recency-weighted run rate, category cover windows, 3× best-month safety cap). Recomputes safety stock and reorder points."
-          >
-            <button onClick={runForecast} disabled={forecasting || !shop} className="btn-accent w-full disabled:bg-mute disabled:hover:bg-mute">
-              {forecasting ? "Running forecasts…" : "Generate / Re-run forecasts"}
-            </button>
-            {forecastResult && (
-              <ResultBanner ok={!forecastResult.startsWith("Error")} message={forecastResult} />
-            )}
-          </Section>
-
           <Section title="Other settings">
-            <div className="grid grid-cols-2 gap-3">
-              <Link href={`/shop/${slug}/suppliers`} className="btn-ghost justify-center">Suppliers</Link>
-              <Link href={`/shop/${slug}/promos`} className="btn-ghost justify-center">Promo calendar</Link>
-            </div>
+            <Link href={`/shop/${slug}/promos`} className="btn-ghost justify-center">Promo calendar</Link>
           </Section>
         </div>
 
@@ -185,12 +81,108 @@ export default function SettingsPage() {
   );
 }
 
-/** Connect an Odoo Online store (Plan 2). OWNER-only (this page is already gated). */
-function OdooConnectionCard({ slug }: { slug: string }) {
+/**
+ * Shopify store connection. Locked read-only summary once connected (Edit unlocks
+ * the fields, Disconnect clears the live token → mock mode). The shop's data source.
+ */
+function ShopifyConnectionCard({ slug, onChanged }: { slug: string; onChanged: () => void }) {
+  const [shop, setShop] = useState<ShopInfo>(null);
+  const [form, setForm] = useState({ name: "", shopifyDomain: "", shopifyAccessToken: "" });
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok?: boolean; message: string } | null>(null);
+
+  async function load() {
+    const r = await apiFetch(slug, "/api/shop").then(x => (x.ok ? x.json() : null)).catch(() => null);
+    if (r) { setShop(r); setForm(f => ({ ...f, name: r.name ?? "", shopifyDomain: r.shopifyDomain ?? "" })); }
+  }
+  useEffect(() => { load(); }, []);
+
+  const connected = !!shop?.shopifyDomain;
+
+  function update<K extends keyof typeof form>(k: K, v: string) { setForm({ ...form, [k]: v }); }
+
+  async function testConnection() {
+    setTesting(true); setTestResult(null);
+    try {
+      const res = await apiFetch(slug, "/api/shop/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shopifyDomain: form.shopifyDomain, shopifyAccessToken: form.shopifyAccessToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTestResult({ ok: false, message: data.error || "Failed" }); return; }
+      setTestResult({ ok: true, message: `Connected to ${data.shopName}${data.mock ? " (mock mode)" : ""}` });
+    } catch (e) {
+      setTestResult({ ok: false, message: e instanceof Error ? e.message : "Network error" });
+    } finally { setTesting(false); }
+  }
+
+  async function saveShop() {
+    setSaving(true);
+    try {
+      const res = await apiFetch(slug, "/api/shop", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) { setForm(f => ({ ...f, shopifyAccessToken: "" })); setEditing(false); await load(); onChanged(); }
+    } finally { setSaving(false); }
+  }
+
+  async function disconnect() {
+    if (!confirm("Disconnect the live Shopify token? The shop falls back to mock mode until you reconnect.")) return;
+    await apiFetch(slug, "/api/shop", { method: "DELETE" });
+    await load(); onChanged();
+  }
+
+  // Locked summary when connected and not editing.
+  if (connected && !editing) {
+    return (
+      <Section title="Shopify connection" description="Your shop's data source — sales, stock and prices sync from here.">
+        <div className="text-sm text-ink-soft">
+          Connected as <span className="num text-ink">{shop!.shopifyDomain}</span> · {shop!.currency} · {shop!.hasToken ? "live token" : "mock mode"}
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button onClick={() => setEditing(true)} className="btn-ghost">Edit</button>
+          <button onClick={disconnect} className="btn-ghost text-status-bad hover:text-status-bad">Disconnect</button>
+        </div>
+      </Section>
+    );
+  }
+
+  return (
+    <Section
+      title="Shopify connection"
+      description="Leave the access token blank to use mock mode (scrapes the public storefront)."
+    >
+      <div className="grid gap-4">
+        <Field label="Shop name" value={form.name} onChange={v => update("name", v)} />
+        <Field label="Shopify domain" value={form.shopifyDomain} onChange={v => update("shopifyDomain", v)} placeholder="yourshop.co or yourshop.myshopify.com" />
+        <Field label="Admin API access token (optional)" value={form.shopifyAccessToken} onChange={v => update("shopifyAccessToken", v)} placeholder="shpat_…" type="password" />
+      </div>
+      {testResult && <ResultBanner ok={!!testResult.ok} message={testResult.message} />}
+      <div className="mt-5 flex gap-2 flex-wrap">
+        <button onClick={testConnection} disabled={testing || !form.shopifyDomain} className="btn-ghost disabled:opacity-50">
+          {testing ? "Testing…" : "Test connection"}
+        </button>
+        <button onClick={saveShop} disabled={saving || !form.shopifyDomain || !form.name} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+          {saving ? "Saving…" : connected ? "Update" : "Save"}
+        </button>
+        {connected && <button onClick={() => { setEditing(false); setTestResult(null); }} className="btn-ghost">Cancel</button>}
+      </div>
+    </Section>
+  );
+}
+
+/** Connect an Odoo Online store. Locked summary once connected (Edit / Disconnect). */
+function OdooConnectionCard({ slug, onChanged }: { slug: string; onChanged: () => void }) {
   const [f, setF] = useState({ baseUrl: "", database: "", username: "", apiKey: "" });
   const [connected, setConnected] = useState(false);
   const [hasKey, setHasKey] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -223,7 +215,8 @@ function OdooConnectionCard({ slug }: { slug: string }) {
       if (!res.ok) { setResult({ ok: false, message: d.error || "Failed" }); return; }
       setResult({ ok: true, message: "Saved." });
       setF(s => ({ ...s, apiKey: "" }));
-      await load();
+      setEditing(false);
+      await load(); onChanged();
     } catch (e) { setResult({ ok: false, message: e instanceof Error ? e.message : "Network error" }); } finally { setSaving(false); }
   }
   async function sync() {
@@ -237,8 +230,31 @@ function OdooConnectionCard({ slug }: { slug: string }) {
       await load();
     } catch (e) { setResult({ ok: false, message: e instanceof Error ? e.message : "Network error" }); } finally { setSyncing(false); }
   }
+  async function disconnect() {
+    if (!confirm("Disconnect Odoo? Syncing stops until you reconnect. Your credentials are kept.")) return;
+    await apiFetch(slug, "/api/odoo", { method: "DELETE" });
+    await load(); onChanged();
+  }
 
   const ready = !!f.baseUrl && !!f.database && !!f.username;
+
+  // Locked summary when connected and not editing.
+  if (connected && !editing) {
+    return (
+      <Section title="Odoo connection" description="Your shop's data source — products, stock, cost, sales and suppliers sync from here (read-only).">
+        <div className="text-sm text-ink-soft">
+          Connected · <span className="num text-ink">{f.database}</span> · last synced {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "never"}
+        </div>
+        {result && <ResultBanner ok={result.ok} message={result.message} />}
+        <div className="mt-4 flex gap-2 flex-wrap">
+          <button onClick={sync} disabled={syncing} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">{syncing ? "Syncing…" : "Sync now"}</button>
+          <button onClick={() => setEditing(true)} className="btn-ghost">Edit</button>
+          <button onClick={disconnect} className="btn-ghost text-status-bad hover:text-status-bad">Disconnect</button>
+        </div>
+      </Section>
+    );
+  }
+
   return (
     <Section title="Odoo connection" description="Connect an Odoo Online store. Wezesha pulls products, stock, cost, sales and suppliers via Odoo's API (read-only).">
       <div className="grid gap-4">
@@ -251,23 +267,75 @@ function OdooConnectionCard({ slug }: { slug: string }) {
       <div className="mt-5 flex gap-2 flex-wrap">
         <button onClick={test} disabled={testing || !ready} className="btn-ghost disabled:opacity-50">{testing ? "Testing…" : "Test connection"}</button>
         <button onClick={save} disabled={saving || !ready} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">{saving ? "Saving…" : connected ? "Update" : "Save"}</button>
-        {connected && <button onClick={sync} disabled={syncing} className="btn-ghost disabled:opacity-50">{syncing ? "Syncing…" : "Sync now"}</button>}
+        {connected && <button onClick={() => { setEditing(false); setResult(null); }} className="btn-ghost">Cancel</button>}
       </div>
-      {connected && (
-        <div className="mt-4 text-2xs text-mute">
-          Connected · <span className="num text-ink-soft">{f.database}</span> · last synced {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "never"}
-        </div>
+    </Section>
+  );
+}
+
+type CostResult = { ok?: boolean; updated?: number; matched?: number; unmatched?: number; totalRows?: number; sampleUnmatched?: string[]; error?: string };
+
+/**
+ * Cost-of-goods upload. The owner exports product costs from QuickBooks (via the
+ * n8n COGS workflow → name,sku,cost CSV) and uploads it here. Matches each row to
+ * a product by SKU when present, else by normalized name; writes Product.costKes.
+ */
+function CostUploadCard({ slug }: { slug: string }) {
+  const [csv, setCsv] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<CostResult | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setCsv(await file.text());
+    setRes(null);
+  }
+
+  async function upload() {
+    if (!csv.trim()) return;
+    setBusy(true); setRes(null);
+    try {
+      const r = await apiFetch(slug, "/api/costs/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv }),
+      });
+      const d: CostResult = await r.json();
+      setRes(d);
+      if (r.ok && d.unmatched === 0) { setCsv(""); setFileName(""); if (fileRef.current) fileRef.current.value = ""; }
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Section
+      title="Cost of goods"
+      description="Upload a CSV of product costs (columns: name, sku, cost) — e.g. the export from your QuickBooks → COGS workflow. We match by SKU, then by name, and update each product's cost."
+    >
+      <div className="flex items-center gap-3 flex-wrap">
+        <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onFile} className="text-sm file:btn-ghost file:mr-3" />
+        <button onClick={upload} disabled={busy || !csv.trim()} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+          {busy ? "Uploading…" : "Upload costs"}
+        </button>
+        {fileName && <span className="text-2xs text-mute num">{fileName}</span>}
+      </div>
+      {res && (
+        res.error
+          ? <ResultBanner ok={false} message={res.error} />
+          : <ResultBanner ok={(res.unmatched ?? 0) === 0} message={
+              `Updated ${res.updated ?? 0} of ${res.totalRows ?? 0} rows · ${res.unmatched ?? 0} unmatched`
+              + (res.sampleUnmatched && res.sampleUnmatched.length ? ` (e.g. ${res.sampleUnmatched.slice(0, 3).join(", ")})` : "")
+            } />
       )}
     </Section>
   );
 }
 
 type ShopStatus = {
-  products: { total: number; withCost: number; mapped: number; withPrediction: number };
-  suppliers: { count: number; withMoq: number };
-  members: { count: number };
-  shopify: { connected: boolean; lastSyncAt: string | null };
-  quickbooks: { connected: boolean };
+  products: { total: number; withCost: number; withPrediction: number };
   forecast: { lastRunAt: string | null };
 };
 
@@ -284,9 +352,10 @@ function relativeTime(iso: string | null): string {
 }
 
 /**
- * Live setup-readiness boxes. Everything is derived per-tenant from GET
- * /api/shop/status — a fresh shop shows empty/grey boxes, a configured one shows
- * its real coverage. No shop is special-cased.
+ * Live setup-readiness boxes — derived per-tenant from GET /api/shop/status. Trimmed
+ * to what feeds the buy list across both Shopify and Odoo shops: cost coverage and
+ * whether recommendations have been generated. Connection status lives on the card
+ * above + the sidebar sync badge.
  */
 function StatusGrid({ slug }: { slug: string }) {
   const [s, setS] = useState<ShopStatus | null>(null);
@@ -302,27 +371,7 @@ function StatusGrid({ slug }: { slug: string }) {
   const missingCost = total - (s?.products.withCost ?? 0);
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-      <StatusBox
-        label="Shopify"
-        state={!s ? "loading" : s.shopify.connected ? "ok" : "empty"}
-        value={!s ? "…" : s.shopify.connected ? "Connected" : "Not connected"}
-        detail={
-          !s
-            ? ""
-            : s.shopify.connected
-              ? `synced ${relativeTime(s.shopify.lastSyncAt)}`
-              : "connect below to sync sales & stock"
-        }
-      />
-
-      <StatusBox
-        label="QuickBooks"
-        state={!s ? "loading" : s.quickbooks.connected ? "ok" : "empty"}
-        value={!s ? "…" : s.quickbooks.connected ? "Connected" : "Not connected"}
-        detail={!s ? "" : s.quickbooks.connected ? "cost & orders syncing" : "pulls cost prices & past orders"}
-      />
-
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
       <StatusBox
         label="Cost coverage"
         href={`/shop/${slug}/products`}
@@ -341,30 +390,6 @@ function StatusGrid({ slug }: { slug: string }) {
       />
 
       <StatusBox
-        label="Suppliers & mapping"
-        href={`/shop/${slug}/suppliers`}
-        action="Manage"
-        state={!s ? "loading" : s.suppliers.count === 0 ? "empty" : s.products.mapped < total ? "warn" : "ok"}
-        value={!s ? "…" : `${s.suppliers.count} supplier${s.suppliers.count === 1 ? "" : "s"}`}
-        detail={
-          !s
-            ? ""
-            : s.suppliers.count === 0
-              ? "add suppliers + lead times"
-              : `${s.products.mapped} / ${total} products mapped`
-        }
-      />
-
-      <StatusBox
-        label="Pack size / MOQ"
-        href={`/shop/${slug}/suppliers`}
-        action="Add"
-        state={!s ? "loading" : s.suppliers.count === 0 ? "empty" : s.suppliers.withMoq === 0 ? "warn" : "ok"}
-        value={!s ? "…" : s.suppliers.count === 0 ? "—" : `${s.suppliers.withMoq} / ${s.suppliers.count}`}
-        detail={!s ? "" : s.suppliers.count === 0 ? "set per supplier" : "suppliers with an MOQ set"}
-      />
-
-      <StatusBox
         label="Recommendations"
         href={`/shop/${slug}/dashboard`}
         action="View"
@@ -375,7 +400,7 @@ function StatusGrid({ slug }: { slug: string }) {
             ? ""
             : s.forecast.lastRunAt
               ? `last run ${relativeTime(s.forecast.lastRunAt)}`
-              : "run a forecast below"
+              : "syncs generate these automatically"
         }
       />
     </div>
@@ -421,12 +446,13 @@ function StatusBox({
 
 type Member = { id: string; email: string; role: "OWNER" | "MEMBER"; isYou: boolean };
 
-/** Users — owners add teammates by email (they sign in with the same 6-digit code). */
+/** Users — collapsed read-only list by default; Manage unlocks add/remove (owners only). */
 function UsersSection({ slug }: { slug: string }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"OWNER" | "MEMBER">("MEMBER");
   const [busy, setBusy] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function load() {
@@ -485,30 +511,37 @@ function UsersSection({ slug }: { slug: string }) {
               <div className="text-sm font-medium truncate">{m.email}{m.isYou && <span className="text-2xs text-mute font-normal"> · you</span>}</div>
             </div>
             <span className={m.role === "OWNER" ? "badge-info" : "badge-mute"}>{m.role === "OWNER" ? "Owner" : "Member"}</span>
-            {youAreOwner && !m.isYou && (
+            {managing && youAreOwner && !m.isYou && (
               <button onClick={() => remove(m)} className="text-2xs text-mute hover:text-status-bad transition">Remove</button>
             )}
           </div>
         ))}
       </div>
 
-      {youAreOwner && (
-        <div className="flex items-end gap-2 flex-wrap">
-          <label className="block flex-1 min-w-[220px]">
-            <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Email</span>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@shop.co.ke" className="input" />
-          </label>
-          <label className="block">
-            <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Role</span>
-            <select value={role} onChange={e => setRole(e.target.value as "OWNER" | "MEMBER")} className="input w-32">
-              <option value="MEMBER">Member</option>
-              <option value="OWNER">Owner</option>
-            </select>
-          </label>
-          <button onClick={add} disabled={busy || !email.includes("@")} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
-            {busy ? "Adding…" : "Add user"}
-          </button>
-        </div>
+      {youAreOwner && !managing && (
+        <button onClick={() => setManaging(true)} className="btn-ghost">Manage users</button>
+      )}
+
+      {youAreOwner && managing && (
+        <>
+          <div className="flex items-end gap-2 flex-wrap">
+            <label className="block flex-1 min-w-[220px]">
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Email</span>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teammate@shop.co.ke" className="input" />
+            </label>
+            <label className="block">
+              <span className="block text-2xs uppercase tracking-wider text-mute mb-1.5">Role</span>
+              <select value={role} onChange={e => setRole(e.target.value as "OWNER" | "MEMBER")} className="input w-32">
+                <option value="MEMBER">Member</option>
+                <option value="OWNER">Owner</option>
+              </select>
+            </label>
+            <button onClick={add} disabled={busy || !email.includes("@")} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">
+              {busy ? "Adding…" : "Add user"}
+            </button>
+            <button onClick={() => { setManaging(false); setMsg(null); }} className="btn-ghost">Done</button>
+          </div>
+        </>
       )}
       {msg && <ResultBanner ok={!msg.startsWith("Error")} message={msg} />}
     </Section>
