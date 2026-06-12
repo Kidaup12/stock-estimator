@@ -247,6 +247,8 @@ export default function Dashboard() {
           </div>
         </div>
 
+        <SpotCheckCard />
+
         {/* Monthly revenue chart */}
         {monthly.length > 0 && (
           <section className="card p-5 mb-6">
@@ -636,6 +638,69 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
         </div>
       </div>
     </div>
+  );
+}
+
+type SpotItem = { id: string; productId: string; sku: string; title: string; systemQty: number; currentStock: number | null; countedQty: number | null; drift: number | null };
+
+/**
+ * Weekly spot-check prompt (G8): asks the owner/staff to physically count a few
+ * high-value SKUs and flags shelf-vs-system drift. Dismissible; hides when every
+ * item is counted.
+ */
+function SpotCheckCard() {
+  const { slug } = useParams<{ slug: string }>();
+  const [items, setItems] = useState<SpotItem[] | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  async function load() {
+    const r = await apiFetch(slug, "/api/spot-check").then(x => (x.ok ? x.json() : null)).catch(() => null);
+    setItems(r?.items ?? []);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save(productId: string) {
+    const v = Number(drafts[productId]);
+    if (!Number.isFinite(v)) return;
+    await apiFetch(slug, "/api/spot-check", { method: "POST", body: JSON.stringify({ productId, countedQty: v }) });
+    await load();
+  }
+
+  if (dismissed || !items) return null;
+  const pending = items.filter(i => i.countedQty == null);
+  if (pending.length === 0) return null;
+
+  return (
+    <section className="card p-4 mb-6 border-accent-200">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-2xs uppercase tracking-wider text-mute">Weekly spot-check</div>
+          <h2 className="text-sm font-semibold mt-0.5">Count these {pending.length} on the shelf</h2>
+          <p className="text-2xs text-mute mt-0.5">Catches drift between the shelf and the app.</p>
+        </div>
+        <button onClick={() => setDismissed(true)} className="btn-ghost text-2xs">Later</button>
+      </div>
+      <div className="space-y-2">
+        {pending.map(i => (
+          <div key={i.id} className="flex items-center gap-3 text-sm">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{i.title}</div>
+              <div className="text-2xs text-mute num">{i.sku} · app says {i.systemQty.toFixed(0)}</div>
+            </div>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="count"
+              value={drafts[i.productId] ?? ""}
+              onChange={e => setDrafts(d => ({ ...d, [i.productId]: e.target.value }))}
+              className="w-20 px-2 py-1 rounded-lg border border-line text-right num"
+            />
+            <button onClick={() => save(i.productId)} className="btn-ghost text-sm">Save</button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

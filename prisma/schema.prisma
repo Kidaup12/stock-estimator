@@ -341,3 +341,34 @@ model PurchaseOrderLine {
 
   @@index([purchaseOrderId])
 }
+
+// Stored forecast-accuracy run (G6) — the monthly backtest cron writes one row so
+// accuracy is tracked over time and the drop-detector (G7) can compare runs.
+// tenantId-only (no relation), mirroring IngestCursor/WebhookEvent.
+model BacktestRun {
+  id         String   @id @default(cuid())
+  tenantId   String
+  runDate    DateTime @default(now())
+  mae        Float
+  bias       Float
+  mape       Float?
+  sampleSize Int
+  tag        String? // "holdout" | "walkforward"
+
+  @@index([tenantId, runDate])
+}
+
+// Weekly shelf-vs-system spot-check (G8): the app prompts a count of 5 SKUs to
+// catch drift between physical shelves and the app's on-hand.
+model SpotCheck {
+  id         String    @id @default(cuid())
+  tenantId   String
+  productId  String
+  weekKey    String // ISO week, e.g. "2026-W24" — one set of prompts per week
+  systemQty  Float // on-hand the app believed when prompting
+  countedQty Float? // what the owner physically counted (null until done)
+  createdAt  DateTime  @default(now())
+  countedAt  DateTime?
+
+  @@index([tenantId, weekKey])
+}
