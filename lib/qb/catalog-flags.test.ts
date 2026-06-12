@@ -19,9 +19,15 @@ describe("computeCatalogFlags", () => {
     expect(r.deactivate).not.toContain("a");
   });
 
-  it("deactivates a Shopify product missing from the feed", () => {
-    const r = computeCatalogFlags([p({ id: "a", sku: "999" })], ["111"]);
-    expect(r.deactivate).toEqual(["a"]);
+  it("deactivates a Shopify product missing from the feed (below the abort threshold)", () => {
+    // One matched + one missing → 50% flagged → under the guard, so it deactivates.
+    const r = computeCatalogFlags(
+      [p({ id: "a", sku: "111" }), p({ id: "b", sku: "999" })],
+      ["111"]
+    );
+    expect(r.deactivate).toEqual(["b"]);
+    expect(r.activate).toEqual(["a"]);
+    expect(r.aborted).toBe(false);
   });
 
   it("never deactivates an owner-pinned product (activeOverride)", () => {
