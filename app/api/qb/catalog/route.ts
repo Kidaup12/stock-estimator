@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { computeCatalogFlags } from "@/lib/qb/catalog-flags";
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
     rows.map((r) => r.sku)
   );
 
+  let costWritten = 0;
   if (!aborted) {
     // Two batched writes — never a per-row loop (Vercel→Supabase timeout rule).
     if (activate.length) {
@@ -70,6 +72,30 @@ export async function POST(req: NextRequest) {
         data: { active: false },
       });
     }
+
+    // Cost rides the SAME feed, keyed by Shopify SKU (matched upstream in n8n) —
+    // so cost lands cleanly instead of the lossy in-app name match. Batched
+    // VALUES-join update (never a per-row loop — Vercel→Supabase timeout rule).
+    const costBySku = new Map<string, number>();
+    for (const r of rows) {
+      if (typeof r.cost === "number" && r.cost > 0) costBySku.set(r.sku.trim().toLowerCase(), r.cost);
+    }
+    const costUpdates: { id: string; cost: number }[] = [];
+    for (const p of products) {
+      const c = costBySku.get(p.sku.trim().toLowerCase());
+      if (c != null) costUpdates.push({ id: p.id, cost: c });
+    }
+    const COST_CHUNK = 500;
+    for (let i = 0; i < costUpdates.length; i += COST_CHUNK) {
+      const chunk = costUpdates.slice(i, i + COST_CHUNK);
+      const tuples = chunk.map((u) => Prisma.sql`(${u.id}, ${u.cost}::float8)`);
+      await prisma.$executeRaw`
+        UPDATE "Product" AS p
+        SET "costKes" = v.cost
+        FROM (VALUES ${Prisma.join(tuples)}) AS v(id, cost)
+        WHERE p.id = v.id AND p."tenantId" = ${tenant.id}`;
+    }
+    costWritten = costUpdates.length;
   }
 
   const run = await prisma.qbSyncRun.create({
@@ -88,6 +114,7 @@ export async function POST(req: NextRequest) {
     aborted,
     matched: counts.matched,
     flagged: counts.flagged,
+    costWritten,
     weak,
     totalProducts: products.length,
     runId: run.id,

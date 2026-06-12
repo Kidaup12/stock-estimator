@@ -26,8 +26,10 @@ export async function GET() {
     latestRun,
     shopifyConnection,
   ] = await Promise.all([
-    prisma.product.count({ where: { tenantId } }),
-    prisma.product.count({ where: { tenantId, costKes: { gt: 0 } } }),
+    // Cost coverage is measured over the REAL catalogue (active only) — once the QB
+    // feed flags the non-QB products inactive, the dead ~800 drop out of both counts.
+    prisma.product.count({ where: { tenantId, active: true } }),
+    prisma.product.count({ where: { tenantId, active: true, costKes: { gt: 0 } } }),
     prisma.product.count({ where: { tenantId, supplierId: { not: null } } }),
     prisma.product.count({ where: { tenantId, predictions: { some: {} } } }),
     prisma.supplier.count({ where: { tenantId } }),
