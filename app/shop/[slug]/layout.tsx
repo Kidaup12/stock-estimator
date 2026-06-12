@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireTenant, TenantError } from "@/lib/auth/context";
+import { RoleProvider } from "@/lib/auth/role-context";
+import type { Role } from "@/lib/auth/money-visibility";
 import ShopNav from "./nav";
 
 /**
@@ -18,8 +20,10 @@ export default async function ShopLayout({
 }) {
   const { slug } = await params;
 
+  let role: Role = "MEMBER"; // least-privilege default
   try {
-    await requireTenant(slug);
+    const ctx = await requireTenant(slug);
+    role = ctx.membership.role as Role;
   } catch (e) {
     if (e instanceof TenantError) {
       if (e.status === 401) redirect("/login");
@@ -29,10 +33,12 @@ export default async function ShopLayout({
   }
 
   return (
-    <div>
-      <ShopNav slug={slug} />
-      {/* Content sits right of the fixed 232px rail on lg+; full-width under the mobile top bar. */}
-      <div className="lg:pl-[232px]">{children}</div>
-    </div>
+    <RoleProvider role={role}>
+      <div>
+        <ShopNav slug={slug} />
+        {/* Content sits right of the fixed 232px rail on lg+; full-width under the mobile top bar. */}
+        <div className="lg:pl-[232px]">{children}</div>
+      </div>
+    </RoleProvider>
   );
 }

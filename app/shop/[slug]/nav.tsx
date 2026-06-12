@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { useIsOwner } from "@/lib/auth/role-context";
 
 /**
  * App shell navigation — GoHighLevel-style left rail (DESIGN.md "App Shell").
@@ -70,19 +71,21 @@ function Brand({ slug }: { slug: string }) {
 }
 
 function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
+  const owner = useIsOwner();
   const base = `/shop/${slug}`;
+  // Restock Planner (budgets) + Settings are OWNER-only (Dave DoD §7).
   const workflow = [
     { href: `${base}/dashboard`, label: "Dashboard", icon: <IconGrid /> },
     { href: `${base}/products`, label: "Products", icon: <IconBox /> },
     { href: `${base}/orders`, label: "Orders", icon: <IconTruck /> },
-    { href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> },
+    ...(owner ? [{ href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> }] : []),
     { href: `${base}/reports`, label: "Reports", icon: <IconChart /> },
   ];
   const setup = [
     { href: `${base}/getting-started`, label: "How it works", icon: <IconHelp /> },
     { href: `${base}/suppliers`, label: "Suppliers", icon: <IconGlobe /> },
     { href: `${base}/promos`, label: "Promo calendar", icon: <IconTag /> },
-    { href: `${base}/settings`, label: "Settings", icon: <IconGear /> },
+    ...(owner ? [{ href: `${base}/settings`, label: "Settings", icon: <IconGear /> }] : []),
   ];
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -104,6 +107,8 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
         </div>
       </nav>
 
+      <SyncStatus />
+
       <div className="px-4 py-3.5 border-t border-line/70 flex items-center justify-between gap-2">
         <span className="text-2xs text-mute font-mono truncate px-2 py-1 rounded-md bg-canvas-tint border border-line">{slug}</span>
         <form action="/auth/signout" method="post">
@@ -118,6 +123,81 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
       </div>
     </>
   );
+}
+
+type SyncInfo = { lastSyncAt: string | null; lastSyncError: string | null; lastSyncOkAt: string | null };
+
+/**
+ * Sync-health badge (Dave DoD §1). Polls /api/shop/status every 60s.
+ *  - red when the last reconcile FAILED (visible warning, not silent),
+ *  - amber when stale (> 2h since last sync),
+ *  - muted "Synced X ago" otherwise.
+ */
+function SyncStatus() {
+  const [info, setInfo] = useState<SyncInfo | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch("/api/shop/status")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (alive && d?.shopify) {
+            setInfo({
+              lastSyncAt: d.shopify.lastSyncAt ?? null,
+              lastSyncError: d.shopify.lastSyncError ?? null,
+              lastSyncOkAt: d.shopify.lastSyncOkAt ?? null,
+            });
+          }
+        })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  if (info === undefined) return null; // not loaded yet
+
+  if (info?.lastSyncError) {
+    const okRel = info.lastSyncOkAt ? formatSync(info.lastSyncOkAt).label.replace("Synced ", "") : "never";
+    return (
+      <div className="px-4 pb-2.5">
+        <span
+          className="inline-flex items-center gap-1.5 text-2xs text-status-bad"
+          title={`Last sync failed: ${info.lastSyncError}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+          Sync failed · last ok {okRel}
+        </span>
+      </div>
+    );
+  }
+
+  const { label, stale } = formatSync(info?.lastSyncAt ?? null);
+  return (
+    <div className="px-4 pb-2.5">
+      <span
+        className={`inline-flex items-center gap-1.5 text-2xs ${stale ? "text-status-warn" : "text-mute"}`}
+        title="Last Shopify sync"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function formatSync(iso: string | null): { label: string; stale: boolean } {
+  if (!iso) return { label: "Never synced", stale: true };
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  let rel: string;
+  if (min < 1) rel = "just now";
+  else if (min < 60) rel = `${min}m ago`;
+  else {
+    const h = Math.floor(min / 60);
+    rel = h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+  }
+  return { label: `Synced ${rel}`, stale: ms > 2 * 60 * 60 * 1000 };
 }
 
 function RailLink({ href, label, icon, active }: { href: string; label: string; icon: ReactNode; active: boolean }) {

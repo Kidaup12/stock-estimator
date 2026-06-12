@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { leadDaysFor } from "@/lib/forecast/category";
 import { latestForecastRunId } from "@/lib/forecast/latest-run";
+import { canSeeMoney } from "@/lib/auth/money-visibility";
 import { z } from "zod";
 
 const schema = z.object({
@@ -32,6 +33,8 @@ export async function POST(req: NextRequest) {
   const auth = await requireTenantOrResponse();
   if (auth instanceof NextResponse) return auth;
   const { tenant } = auth;
+  // Budget planner is money — OWNER only (Dave DoD §7).
+  if (!canSeeMoney(auth.membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // ONE deterministic run only — pulling every run ever produced massive
   // duplicate counts (the "800 selected 1,732 items" bug).

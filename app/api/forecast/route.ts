@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { latestForecastRunId } from "@/lib/forecast/latest-run";
+import { coverDaysFor } from "@/lib/forecast/category";
+import { redactMoney } from "@/lib/auth/money-visibility";
 
 export async function GET() {
   const auth = await requireTenantOrResponse();
@@ -95,7 +97,7 @@ export async function GET() {
   }
   const grossMargin30 = revenue30 > 0 ? (revenue30 - cogs30) / revenue30 : 0;
 
-  return NextResponse.json({
+  return NextResponse.json(redactMoney({
     summary: {
       productCount: predictions.length,
       revenue30,
@@ -144,6 +146,9 @@ export async function GET() {
         daysUntilStockout: p.daysUntilStockout,
         recommendedQty: p.recommendedQty,
         safetyStock: p.safetyStock,
+        // Order-cover window used by the reorder math (LOCAL 17 / imports 21 /
+        // unclassified 30). Sent so the Buy List can show the traceable qty math.
+        coverDays: coverDaysFor(p.product),
         reorderPoint: p.reorderPoint,
         confidence: p.confidence,
         reasoning: p.reasoning,
@@ -163,5 +168,5 @@ export async function GET() {
         reorderRevenueKes: p.recommendedQty * p.product.priceKes,
       };
     }),
-  });
+  }, auth.membership.role));
 }

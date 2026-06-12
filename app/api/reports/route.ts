@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { redactMoney } from "@/lib/auth/money-visibility";
 
 export async function GET() {
   const auth = await requireTenantOrResponse();
@@ -156,7 +157,7 @@ export async function GET() {
   const totalStockCost = products.reduce((s, p) => s + p.currentStock * p.costKes, 0);
   const totalStockRetail = products.reduce((s, p) => s + p.currentStock * p.priceKes, 0);
 
-  return NextResponse.json({
+  return NextResponse.json(redactMoney({
     monthly,
     byCategory,
     byBrand,
@@ -167,5 +168,5 @@ export async function GET() {
     lostRevenueKes,
     totalStockCost,
     totalStockRetail,
-  });
+  }, auth.membership.role));
 }

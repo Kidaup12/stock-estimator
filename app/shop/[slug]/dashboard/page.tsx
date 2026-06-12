@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
 import { downloadFile } from "@/lib/download";
+import { explainQty } from "@/lib/forecast/explain";
+import { useIsOwner } from "@/lib/auth/role-context";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -32,6 +34,7 @@ type Prediction = {
   daysUntilStockout: number;
   recommendedQty: number;
   safetyStock: number;
+  coverDays: number;
   reorderPoint: number;
   confidence: number;
   urgency: "critical" | "high" | "medium" | "low";
@@ -66,8 +69,11 @@ type Summary = {
 
 type MonthlyRow = { month: string; quantity: number; revenueKes: number };
 
-const KES = (n: number) => n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
-const KESshort = (n: number) => {
+// null/undefined → "—": the server nulls cost/margin for non-OWNER (Dave §7).
+const KES = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
+const KESshort = (n: number | null | undefined) => {
+  if (n == null) return "—";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return n.toFixed(0);
@@ -100,6 +106,7 @@ export default function Dashboard() {
   // Multi-select for bulk "Mark as ordered" on the reorder/stockout tables.
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const owner = useIsOwner(); // MEMBER: hide cost summaries (Dave §7)
 
   async function load() {
     setLoading(true);
@@ -219,7 +226,7 @@ export default function Dashboard() {
               <div className={`text-3xl font-semibold mt-1.5 num tracking-tight ${reorder.length > 0 ? "text-status-warn" : "text-status-ok"}`}>
                 {reorder.length}
               </div>
-              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">KES {KESshort(reorderCostKes)} to suppliers →</div>
+              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">{owner ? <>KES {KESshort(reorderCostKes)} to suppliers →</> : <>view reorder list →</>}</div>
             </button>
           </div>
           <div className="card p-5 grid grid-cols-3 divide-x divide-line">
@@ -229,8 +236,8 @@ export default function Dashboard() {
             </div>
             <div className="px-4">
               <div className="text-2xs uppercase tracking-wider text-mute">Dead stock</div>
-              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">KES {KESshort(deadCostKes)}</div>
-              <div className="text-2xs text-mute mt-0.5">{dead.length} SKUs at cost</div>
+              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">{owner ? <>KES {KESshort(deadCostKes)}</> : dead.length}</div>
+              <div className="text-2xs text-mute mt-0.5">{owner ? `${dead.length} SKUs at cost` : "SKUs not selling"}</div>
             </div>
             <div className="pl-4">
               <div className="text-2xs uppercase tracking-wider text-mute">Tracked</div>
@@ -239,6 +246,8 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+
+        <SpotCheckCard />
 
         {/* Monthly revenue chart */}
         {monthly.length > 0 && (
@@ -501,6 +510,8 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
   const checked = rows.filter(p => sel.has(p.productId));
   const checkedCost = checked.reduce((s, p) => s + p.reorderCostKes, 0);
   const allChecked = rows.length > 0 && checked.length === rows.length;
+  const [openMath, setOpenMath] = useState<string | null>(null);
+  const owner = useIsOwner(); // MEMBER: no cost column / totals (Dave §7)
 
   function toggle(id: string) {
     const next = new Set(sel);
@@ -517,7 +528,7 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
       {checked.length > 0 && (
         <div className="sticky top-2 z-10 p-3 rounded-2xl border border-accent-200 bg-accent-50 shadow-soft flex items-center gap-3 flex-wrap">
           <span className="text-sm text-ink-soft">
-            <span className="num font-semibold">{checked.length}</span> selected · KES <span className="num font-semibold">{KESshort(checkedCost)}</span> to suppliers
+            <span className="num font-semibold">{checked.length}</span> selected{owner && (<> · KES <span className="num font-semibold">{KESshort(checkedCost)}</span> to suppliers</>)}
           </span>
           <div className="ml-auto flex gap-2">
             <button onClick={() => setSel(new Set())} className="btn-ghost text-sm">Clear</button>
@@ -546,15 +557,15 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                 <th className="px-3 py-2.5 font-medium text-right">Days left</th>
                 <th className="px-3 py-2.5 font-medium text-right">En route</th>
                 <th className="px-3 py-2.5 font-medium text-right">Order qty</th>
-                <th className="px-5 py-2.5 font-medium text-right">Cost</th>
+                {owner && <th className="px-5 py-2.5 font-medium text-right">Cost</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {rows.map(p => {
                 const isSel = sel.has(p.productId);
                 return (
+                  <Fragment key={p.id}>
                   <tr
-                    key={p.id}
                     onClick={() => toggle(p.productId)}
                     className={`cursor-pointer transition-colors ${isSel ? "bg-accent-50/60" : "hover:bg-canvas"}`}
                   >
@@ -580,6 +591,14 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                         <span className={`shrink-0 ${isOut ? "badge-bad" : p.urgency === "high" ? "badge-warn" : "badge-mute"}`}>
                           {isOut ? "out" : p.urgency}
                         </span>
+                        {p.signals?.some(s => /cap/i.test(s.label)) && (
+                          <span
+                            className="badge-mute shrink-0"
+                            title={p.signals.find(s => /cap/i.test(s.label))?.label || "Capped at 3× best month"}
+                          >
+                            ✂️ capped
+                          </span>
+                        )}
                       </div>
                       <div className="text-2xs text-mute num">{p.product.sku} · {p.product.vendor || "—"}</div>
                     </td>
@@ -591,9 +610,27 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                       {p.daysUntilStockout}d
                     </td>
                     <td className="px-3 py-2 text-right num text-mute">{p.onOrder > 0 ? p.onOrder.toFixed(0) : "—"}</td>
-                    <td className="px-3 py-2 text-right num font-semibold text-accent-700">{p.recommendedQty.toFixed(0)}</td>
-                    <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-accent-700">
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setOpenMath(openMath === p.productId ? null : p.productId); }}
+                        className="hover:underline decoration-dotted underline-offset-2"
+                        title="Show the math"
+                      >
+                        {p.recommendedQty.toFixed(0)}
+                      </button>
+                    </td>
+                    {owner && <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>}
                   </tr>
+                  {openMath === p.productId && (
+                    <tr className="bg-canvas">
+                      <td />
+                      <td colSpan={owner ? 7 : 6} className="px-3 pb-2.5 pt-0 text-2xs text-mute num">
+                        {explainQty({ finalForecast30d: p.finalForecast30d, safetyStock: p.safetyStock, currentStock: p.product.currentStock, onOrder: p.onOrder, coverDays: p.coverDays }).summary}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -601,6 +638,69 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
         </div>
       </div>
     </div>
+  );
+}
+
+type SpotItem = { id: string; productId: string; sku: string; title: string; systemQty: number; currentStock: number | null; countedQty: number | null; drift: number | null };
+
+/**
+ * Weekly spot-check prompt (G8): asks the owner/staff to physically count a few
+ * high-value SKUs and flags shelf-vs-system drift. Dismissible; hides when every
+ * item is counted.
+ */
+function SpotCheckCard() {
+  const { slug } = useParams<{ slug: string }>();
+  const [items, setItems] = useState<SpotItem[] | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  async function load() {
+    const r = await apiFetch(slug, "/api/spot-check").then(x => (x.ok ? x.json() : null)).catch(() => null);
+    setItems(r?.items ?? []);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save(productId: string) {
+    const v = Number(drafts[productId]);
+    if (!Number.isFinite(v)) return;
+    await apiFetch(slug, "/api/spot-check", { method: "POST", body: JSON.stringify({ productId, countedQty: v }) });
+    await load();
+  }
+
+  if (dismissed || !items) return null;
+  const pending = items.filter(i => i.countedQty == null);
+  if (pending.length === 0) return null;
+
+  return (
+    <section className="card p-4 mb-6 border-accent-200">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-2xs uppercase tracking-wider text-mute">Weekly spot-check</div>
+          <h2 className="text-sm font-semibold mt-0.5">Count these {pending.length} on the shelf</h2>
+          <p className="text-2xs text-mute mt-0.5">Catches drift between the shelf and the app.</p>
+        </div>
+        <button onClick={() => setDismissed(true)} className="btn-ghost text-2xs">Later</button>
+      </div>
+      <div className="space-y-2">
+        {pending.map(i => (
+          <div key={i.id} className="flex items-center gap-3 text-sm">
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{i.title}</div>
+              <div className="text-2xs text-mute num">{i.sku} · app says {i.systemQty.toFixed(0)}</div>
+            </div>
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="count"
+              value={drafts[i.productId] ?? ""}
+              onChange={e => setDrafts(d => ({ ...d, [i.productId]: e.target.value }))}
+              className="w-20 px-2 py-1 rounded-lg border border-line text-right num"
+            />
+            <button onClick={() => save(i.productId)} className="btn-ghost text-sm">Save</button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
