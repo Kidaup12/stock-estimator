@@ -20,10 +20,11 @@ const Body = z.object({
     .array(
       z.object({
         sku: z.string(),
-        qbName: z.string().optional(),
-        qtyOnHand: z.number().optional(),
-        cost: z.number().optional(),
-        matchConfidence: z.number().optional(),
+        // nullable: the n8n feed sends null (not undefined) for QB fields it lacks.
+        qbName: z.string().optional().nullable(),
+        qtyOnHand: z.number().optional().nullable(),
+        cost: z.number().optional().nullable(),
+        matchConfidence: z.number().optional().nullable(),
       })
     )
     .max(20000),
