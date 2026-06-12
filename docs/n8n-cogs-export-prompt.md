@@ -29,10 +29,10 @@ is always included).
 >        json: {
 >          Name: (it.Name || it.FullyQualifiedName || "").toString().trim(),
 >          Sku:  (it.Sku || "").toString().trim(),
->          Cost: it.PurchaseCost ?? it.UnitPrice ?? "",
+>          Cost: Number(it.PurchaseCost ?? 0),
 >        },
 >      }))
->      .filter(r => r.json.Cost !== "" && Number(r.json.Cost) > 0 && (r.json.Sku || r.json.Name));
+>      .filter(r => r.json.Cost > 0 && (r.json.Sku || r.json.Name));
 >    ```
 > 4. **Convert to File** (`n8n-nodes-base.convertToFile`): CSV, columns in order
 >    `Name, Sku, Cost`, file name `cogs.csv`.
@@ -44,8 +44,8 @@ is always included).
 > Notes:
 > - QuickBooks `Sku` is often blank — that's expected; the `Name` column is the
 >   fallback match key downstream, so never drop it.
-> - `PurchaseCost` is the cost of goods. Some items expose it as `UnitPrice` only;
->   the mapper falls back to that, but prefer `PurchaseCost`.
+> - Cost MUST come from `PurchaseCost` (cost of goods) ONLY. Never use `UnitPrice` —
+>   that's the sell price; items with no `PurchaseCost` are dropped, not guessed.
 
 ---
 
