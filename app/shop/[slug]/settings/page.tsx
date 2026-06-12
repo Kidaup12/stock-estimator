@@ -68,6 +68,8 @@ export default function SettingsPage() {
 
           <CostUploadCard slug={slug} />
 
+          <QuickBooksCard slug={slug} />
+
           <UsersSection slug={slug} />
 
           <Section title="Other settings">
@@ -329,6 +331,46 @@ function CostUploadCard({ slug }: { slug: string }) {
               `Updated ${res.updated ?? 0} of ${res.totalRows ?? 0} rows · ${res.unmatched ?? 0} unmatched`
               + (res.sampleUnmatched && res.sampleUnmatched.length ? ` (e.g. ${res.sampleUnmatched.slice(0, 3).join(", ")})` : "")
             } />
+      )}
+    </Section>
+  );
+}
+
+type QbStatus = {
+  last: { at: string; matched: number; flagged: number; weak: number; totalProducts: number; aborted: boolean } | null;
+  flaggedNow: number;
+};
+
+/**
+ * QuickBooks clean-data overlay status. QB decides which products are real; the
+ * n8n catalogue feed POSTs to /api/qb/catalog, and products QB doesn't have are
+ * held out of the buy list (never deleted, never on stock level).
+ */
+function QuickBooksCard({ slug }: { slug: string }) {
+  const [s, setS] = useState<QbStatus | null>(null);
+  useEffect(() => {
+    apiFetch(slug, "/api/qb/status").then((r) => (r.ok ? r.json() : null)).then(setS).catch(() => setS(null));
+  }, [slug]);
+
+  return (
+    <Section
+      title="QuickBooks (clean data)"
+      description="QuickBooks decides which products are real. The n8n catalogue feed POSTs here; products QuickBooks doesn't have are held out of the buy list — never deleted, and never just because they're out of stock."
+    >
+      {s?.last ? (
+        <div className="text-sm text-ink-soft">
+          Last sync {new Date(s.last.at).toLocaleString()} · <span className="num">{s.last.matched}</span> matched ·{" "}
+          <span className="num">{s.flaggedNow}</span> held out
+          {s.last.weak > 0 && <> · <span className="num">{s.last.weak}</span> weak matches</>}
+          {s.last.aborted && <span className="text-status-warn"> · last feed refused (looked partial)</span>}
+        </div>
+      ) : (
+        <div className="text-sm text-mute">No QuickBooks feed yet. Wire the n8n catalogue feed to <span className="num">POST /api/qb/catalog</span>.</div>
+      )}
+      {(s?.flaggedNow ?? 0) > 0 && (
+        <Link href={`/shop/${slug}/not-in-quickbooks`} className="inline-block mt-3 text-2xs font-medium text-accent-700 hover:underline">
+          Review {s?.flaggedNow} not in QuickBooks →
+        </Link>
       )}
     </Section>
   );
