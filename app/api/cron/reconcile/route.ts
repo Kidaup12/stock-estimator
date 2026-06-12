@@ -31,9 +31,18 @@ export async function GET(req: NextRequest) {
   for (const t of tenants) {
     try {
       const r = await reconcileTenant(t.tenantId, undefined, { skipForecast: mode === "sync" });
+      // Record success so the UI can show "synced X ago" and clear any prior error (G1).
+      await prisma.shopifyConnection
+        .update({ where: { tenantId: t.tenantId }, data: { lastSyncOkAt: new Date(), lastSyncError: null } })
+        .catch(() => {});
       results.push({ tenantId: t.tenantId, ok: true, detail: r });
     } catch (err) {
-      results.push({ tenantId: t.tenantId, ok: false, detail: (err as Error).message });
+      const message = (err as Error).message;
+      // Persist the failure so the dashboard warns instead of failing silently (G1).
+      await prisma.shopifyConnection
+        .update({ where: { tenantId: t.tenantId }, data: { lastSyncError: message.slice(0, 500) } })
+        .catch(() => {});
+      results.push({ tenantId: t.tenantId, ok: false, detail: message });
     }
   }
   return NextResponse.json({ ok: true, mode, tenants: results.length, results });

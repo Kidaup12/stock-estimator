@@ -125,26 +125,54 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
   );
 }
 
+type SyncInfo = { lastSyncAt: string | null; lastSyncError: string | null; lastSyncOkAt: string | null };
+
 /**
- * "Synced X min ago" badge (Dave DoD §1). Polls /api/shop/status every 60s.
- * Amber when stale (> 2h since last product sync); muted otherwise.
+ * Sync-health badge (Dave DoD §1). Polls /api/shop/status every 60s.
+ *  - red when the last reconcile FAILED (visible warning, not silent),
+ *  - amber when stale (> 2h since last sync),
+ *  - muted "Synced X ago" otherwise.
  */
 function SyncStatus() {
-  const [lastSyncAt, setLastSyncAt] = useState<string | null | undefined>(undefined);
+  const [info, setInfo] = useState<SyncInfo | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
     const load = () =>
       fetch("/api/shop/status")
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (alive && d) setLastSyncAt(d?.shopify?.lastSyncAt ?? null); })
+        .then((d) => {
+          if (alive && d?.shopify) {
+            setInfo({
+              lastSyncAt: d.shopify.lastSyncAt ?? null,
+              lastSyncError: d.shopify.lastSyncError ?? null,
+              lastSyncOkAt: d.shopify.lastSyncOkAt ?? null,
+            });
+          }
+        })
         .catch(() => {});
     load();
     const t = setInterval(load, 60_000);
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  if (lastSyncAt === undefined) return null; // not loaded yet
-  const { label, stale } = formatSync(lastSyncAt);
+  if (info === undefined) return null; // not loaded yet
+
+  if (info?.lastSyncError) {
+    const okRel = info.lastSyncOkAt ? formatSync(info.lastSyncOkAt).label.replace("Synced ", "") : "never";
+    return (
+      <div className="px-4 pb-2.5">
+        <span
+          className="inline-flex items-center gap-1.5 text-2xs text-status-bad"
+          title={`Last sync failed: ${info.lastSyncError}`}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+          Sync failed · last ok {okRel}
+        </span>
+      </div>
+    );
+  }
+
+  const { label, stale } = formatSync(info?.lastSyncAt ?? null);
   return (
     <div className="px-4 pb-2.5">
       <span

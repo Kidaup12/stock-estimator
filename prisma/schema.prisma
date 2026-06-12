@@ -238,6 +238,8 @@ model ShopifyConnection {
   scope         String
   installedAt   DateTime  @default(now())
   uninstalledAt DateTime?
+  lastSyncOkAt  DateTime? // last successful reconcile (G1 sync-health)
+  lastSyncError String?   // message of the last failed reconcile; cleared on success
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }

@@ -53,6 +53,10 @@ export async function GET() {
     shopify: {
       connected: shopifyConnected,
       lastSyncAt: totalProducts > 0 ? latestSync._max.lastSynced : null,
+      // Sync health (G1): surface the last failed/successful reconcile so the nav
+      // badge can warn on a silent failure.
+      lastSyncError: shopifyConnection?.lastSyncError ?? null,
+      lastSyncOkAt: shopifyConnection?.lastSyncOkAt ?? null,
     },
     // QuickBooks sync is not wired yet — surfaced as a "not connected" box so the
     // UI is complete and lights up automatically once the integration lands.
