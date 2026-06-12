@@ -30,8 +30,8 @@ export async function GET() {
     // feed flags the non-QB products inactive, the dead ~800 drop out of both counts.
     prisma.product.count({ where: { tenantId, active: true } }),
     prisma.product.count({ where: { tenantId, active: true, costKes: { gt: 0 } } }),
-    prisma.product.count({ where: { tenantId, supplierId: { not: null } } }),
-    prisma.product.count({ where: { tenantId, predictions: { some: {} } } }),
+    prisma.product.count({ where: { tenantId, active: true, supplierId: { not: null } } }),
+    prisma.product.count({ where: { tenantId, active: true, predictions: { some: {} } } }),
     prisma.supplier.count({ where: { tenantId } }),
     prisma.supplier.count({ where: { tenantId, moq: { gt: 1 } } }),
     prisma.membership.count({ where: { tenantId } }),

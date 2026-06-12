@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const [products, salesAgg, snapshots, trackingSince] = await Promise.all([
     prisma.product.findMany({
-      where: { tenantId },
+      where: { tenantId, active: true },
       select: {
         id: true, title: true, sku: true, abcCategory: true, currentStock: true, vendor: true,
         onOrder: true, expectedArrivalAt: true, leadTimeDays: true, importCategory: true,

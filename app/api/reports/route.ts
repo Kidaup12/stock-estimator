@@ -15,7 +15,7 @@ export async function GET() {
   const last365 = new Date(today); last365.setUTCFullYear(today.getUTCFullYear() - 1);
 
   const [products, sales30, sales365, predictions] = await Promise.all([
-    prisma.product.findMany({ where: { tenantId: tenant.id } }),
+    prisma.product.findMany({ where: { tenantId: tenant.id, active: true } }),
     prisma.salesHistory.groupBy({
       by: ["productId"],
       where: { tenantId: tenant.id, date: { gte: last30 } },

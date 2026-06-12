@@ -30,6 +30,9 @@ export async function GET() {
           where: {
             tenantId: tenant.id,
             forecastRunId: runId,
+            // Hide products QB doesn't have (active=false) from the buy list, even
+            // before the next forecast re-run regenerates predictions.
+            product: { active: true },
           },
           include: { product: true },
           orderBy: { daysUntilStockout: "asc" },
