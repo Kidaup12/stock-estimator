@@ -1,7 +1,6 @@
 {
   "crons": [
     { "path": "/api/cron/reconcile", "schedule": "0 23 * * *" },
-    { "path": "/api/cron/reconcile?mode=sync", "schedule": "0 0-22 * * *" },
     { "path": "/api/cron/backtest", "schedule": "0 2 1 * *" }
   ]
 }
