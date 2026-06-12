@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type MouseEvent } from "react";
+import { Fragment, useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
 import { downloadFile } from "@/lib/download";
+import { explainQty } from "@/lib/forecast/explain";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -32,6 +33,7 @@ type Prediction = {
   daysUntilStockout: number;
   recommendedQty: number;
   safetyStock: number;
+  coverDays: number;
   reorderPoint: number;
   confidence: number;
   urgency: "critical" | "high" | "medium" | "low";
@@ -501,6 +503,7 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
   const checked = rows.filter(p => sel.has(p.productId));
   const checkedCost = checked.reduce((s, p) => s + p.reorderCostKes, 0);
   const allChecked = rows.length > 0 && checked.length === rows.length;
+  const [openMath, setOpenMath] = useState<string | null>(null);
 
   function toggle(id: string) {
     const next = new Set(sel);
@@ -553,8 +556,8 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
               {rows.map(p => {
                 const isSel = sel.has(p.productId);
                 return (
+                  <Fragment key={p.id}>
                   <tr
-                    key={p.id}
                     onClick={() => toggle(p.productId)}
                     className={`cursor-pointer transition-colors ${isSel ? "bg-accent-50/60" : "hover:bg-canvas"}`}
                   >
@@ -580,6 +583,14 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                         <span className={`shrink-0 ${isOut ? "badge-bad" : p.urgency === "high" ? "badge-warn" : "badge-mute"}`}>
                           {isOut ? "out" : p.urgency}
                         </span>
+                        {p.signals?.some(s => /cap/i.test(s.label)) && (
+                          <span
+                            className="badge-mute shrink-0"
+                            title={p.signals.find(s => /cap/i.test(s.label))?.label || "Capped at 3× best month"}
+                          >
+                            ✂️ capped
+                          </span>
+                        )}
                       </div>
                       <div className="text-2xs text-mute num">{p.product.sku} · {p.product.vendor || "—"}</div>
                     </td>
@@ -591,9 +602,27 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                       {p.daysUntilStockout}d
                     </td>
                     <td className="px-3 py-2 text-right num text-mute">{p.onOrder > 0 ? p.onOrder.toFixed(0) : "—"}</td>
-                    <td className="px-3 py-2 text-right num font-semibold text-accent-700">{p.recommendedQty.toFixed(0)}</td>
+                    <td className="px-3 py-2 text-right num font-semibold text-accent-700">
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setOpenMath(openMath === p.productId ? null : p.productId); }}
+                        className="hover:underline decoration-dotted underline-offset-2"
+                        title="Show the math"
+                      >
+                        {p.recommendedQty.toFixed(0)}
+                      </button>
+                    </td>
                     <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>
                   </tr>
+                  {openMath === p.productId && (
+                    <tr className="bg-canvas">
+                      <td />
+                      <td colSpan={7} className="px-3 pb-2.5 pt-0 text-2xs text-mute num">
+                        {explainQty({ finalForecast30d: p.finalForecast30d, safetyStock: p.safetyStock, currentStock: p.product.currentStock, onOrder: p.onOrder, coverDays: p.coverDays }).summary}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
