@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { redactMoney } from "@/lib/auth/money-visibility";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -42,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     byMonth.set(m, existing);
   }
 
-  return NextResponse.json({
+  return NextResponse.json(redactMoney({
     product: {
       id: product.id,
       sku: product.sku,
@@ -90,7 +91,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           latestOrder: prediction.orders[0] ? { id: prediction.orders[0].id, status: prediction.orders[0].status } : null,
         }
       : null,
-  });
+  }, auth.membership.role));
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { useIsOwner } from "@/lib/auth/role-context";
 
 /**
  * App shell navigation — GoHighLevel-style left rail (DESIGN.md "App Shell").
@@ -70,19 +71,21 @@ function Brand({ slug }: { slug: string }) {
 }
 
 function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
+  const owner = useIsOwner();
   const base = `/shop/${slug}`;
+  // Restock Planner (budgets) + Settings are OWNER-only (Dave DoD §7).
   const workflow = [
     { href: `${base}/dashboard`, label: "Dashboard", icon: <IconGrid /> },
     { href: `${base}/products`, label: "Products", icon: <IconBox /> },
     { href: `${base}/orders`, label: "Orders", icon: <IconTruck /> },
-    { href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> },
+    ...(owner ? [{ href: `${base}/restock-planner`, label: "Restock Planner", icon: <IconWallet /> }] : []),
     { href: `${base}/reports`, label: "Reports", icon: <IconChart /> },
   ];
   const setup = [
     { href: `${base}/getting-started`, label: "How it works", icon: <IconHelp /> },
     { href: `${base}/suppliers`, label: "Suppliers", icon: <IconGlobe /> },
     { href: `${base}/promos`, label: "Promo calendar", icon: <IconTag /> },
-    { href: `${base}/settings`, label: "Settings", icon: <IconGear /> },
+    ...(owner ? [{ href: `${base}/settings`, label: "Settings", icon: <IconGear /> }] : []),
   ];
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 

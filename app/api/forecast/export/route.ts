@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { latestForecastRunId } from "@/lib/forecast/latest-run";
+import { canSeeMoney } from "@/lib/auth/money-visibility";
 
 /** CSV-escape a value (quote + double internal quotes). */
 function csv(v: string | number | null | undefined): string {
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireTenantOrResponse();
   if (auth instanceof NextResponse) return auth;
   const { tenant } = auth;
+  const owner = canSeeMoney(auth.membership.role); // MEMBER: no cost column (Dave §7)
   const tab = req.nextUrl.searchParams.get("tab") ?? "reorder";
 
   const today = new Date();
@@ -69,13 +71,17 @@ export async function GET(req: NextRequest) {
         eta,
         p.daysUntilStockout,
         p.recommendedQty,
-        Math.round(p.recommendedQty * p.product.costKes),
+        ...(owner ? [Math.round(p.recommendedQty * p.product.costKes)] : []),
         p.product.leadTimeDays ?? "",
       ].map(csv).join(",");
     });
 
-  const header =
-    "SKU,Product,Brand,Run per day,Current stock,En route,En route ETA,Days left,Reorder qty,Reorder cost (KES),Lead time (days)";
+  const header = [
+    "SKU", "Product", "Brand", "Run per day", "Current stock", "En route",
+    "En route ETA", "Days left", "Reorder qty",
+    ...(owner ? ["Reorder cost (KES)"] : []),
+    "Lead time (days)",
+  ].join(",");
   const body = [header, ...rows].join("\n");
   const date = today.toISOString().slice(0, 10);
 

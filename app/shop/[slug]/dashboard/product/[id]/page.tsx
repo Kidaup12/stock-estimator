@@ -199,7 +199,7 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
               <Row
                 label="Recommended order qty"
                 value={`${prediction.recommendedQty.toFixed(0)} units`}
-                hint={`Cost to supplier: KES ${KES(prediction.recommendedQty * product.costKes)} · expected revenue: KES ${KES(prediction.recommendedQty * product.priceKes)}`}
+                hint={`${product.costKes != null && product.costKes > 0 ? `Cost to supplier: KES ${KES(prediction.recommendedQty * product.costKes)} · ` : ""}expected revenue: KES ${KES(prediction.recommendedQty * product.priceKes)}`}
                 bold
                 accent
               />

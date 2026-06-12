@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-fetch";
 import { downloadFile } from "@/lib/download";
 import { explainQty } from "@/lib/forecast/explain";
+import { useIsOwner } from "@/lib/auth/role-context";
 
 type Signal = { label: string; deltaPct: number; emoji: string };
 
@@ -68,8 +69,11 @@ type Summary = {
 
 type MonthlyRow = { month: string; quantity: number; revenueKes: number };
 
-const KES = (n: number) => n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
-const KESshort = (n: number) => {
+// null/undefined → "—": the server nulls cost/margin for non-OWNER (Dave §7).
+const KES = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
+const KESshort = (n: number | null | undefined) => {
+  if (n == null) return "—";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return n.toFixed(0);
@@ -102,6 +106,7 @@ export default function Dashboard() {
   // Multi-select for bulk "Mark as ordered" on the reorder/stockout tables.
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const owner = useIsOwner(); // MEMBER: hide cost summaries (Dave §7)
 
   async function load() {
     setLoading(true);
@@ -221,7 +226,7 @@ export default function Dashboard() {
               <div className={`text-3xl font-semibold mt-1.5 num tracking-tight ${reorder.length > 0 ? "text-status-warn" : "text-status-ok"}`}>
                 {reorder.length}
               </div>
-              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">KES {KESshort(reorderCostKes)} to suppliers →</div>
+              <div className="text-2xs text-mute mt-1 group-hover:text-ink transition-colors">{owner ? <>KES {KESshort(reorderCostKes)} to suppliers →</> : <>view reorder list →</>}</div>
             </button>
           </div>
           <div className="card p-5 grid grid-cols-3 divide-x divide-line">
@@ -231,8 +236,8 @@ export default function Dashboard() {
             </div>
             <div className="px-4">
               <div className="text-2xs uppercase tracking-wider text-mute">Dead stock</div>
-              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">KES {KESshort(deadCostKes)}</div>
-              <div className="text-2xs text-mute mt-0.5">{dead.length} SKUs at cost</div>
+              <div className="text-lg font-semibold mt-1.5 num text-ink-soft">{owner ? <>KES {KESshort(deadCostKes)}</> : dead.length}</div>
+              <div className="text-2xs text-mute mt-0.5">{owner ? `${dead.length} SKUs at cost` : "SKUs not selling"}</div>
             </div>
             <div className="pl-4">
               <div className="text-2xs uppercase tracking-wider text-mute">Tracked</div>
@@ -504,6 +509,7 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
   const checkedCost = checked.reduce((s, p) => s + p.reorderCostKes, 0);
   const allChecked = rows.length > 0 && checked.length === rows.length;
   const [openMath, setOpenMath] = useState<string | null>(null);
+  const owner = useIsOwner(); // MEMBER: no cost column / totals (Dave §7)
 
   function toggle(id: string) {
     const next = new Set(sel);
@@ -520,7 +526,7 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
       {checked.length > 0 && (
         <div className="sticky top-2 z-10 p-3 rounded-2xl border border-accent-200 bg-accent-50 shadow-soft flex items-center gap-3 flex-wrap">
           <span className="text-sm text-ink-soft">
-            <span className="num font-semibold">{checked.length}</span> selected · KES <span className="num font-semibold">{KESshort(checkedCost)}</span> to suppliers
+            <span className="num font-semibold">{checked.length}</span> selected{owner && (<> · KES <span className="num font-semibold">{KESshort(checkedCost)}</span> to suppliers</>)}
           </span>
           <div className="ml-auto flex gap-2">
             <button onClick={() => setSel(new Set())} className="btn-ghost text-sm">Clear</button>
@@ -549,7 +555,7 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                 <th className="px-3 py-2.5 font-medium text-right">Days left</th>
                 <th className="px-3 py-2.5 font-medium text-right">En route</th>
                 <th className="px-3 py-2.5 font-medium text-right">Order qty</th>
-                <th className="px-5 py-2.5 font-medium text-right">Cost</th>
+                {owner && <th className="px-5 py-2.5 font-medium text-right">Cost</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -612,12 +618,12 @@ function ReorderTable({ rows, variant, slug, sel, setSel, bulkBusy, onBulkOrder 
                         {p.recommendedQty.toFixed(0)}
                       </button>
                     </td>
-                    <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>
+                    {owner && <td className="px-5 py-2 text-right num">KES {KESshort(p.reorderCostKes)}</td>}
                   </tr>
                   {openMath === p.productId && (
                     <tr className="bg-canvas">
                       <td />
-                      <td colSpan={7} className="px-3 pb-2.5 pt-0 text-2xs text-mute num">
+                      <td colSpan={owner ? 7 : 6} className="px-3 pb-2.5 pt-0 text-2xs text-mute num">
                         {explainQty({ finalForecast30d: p.finalForecast30d, safetyStock: p.safetyStock, currentStock: p.product.currentStock, onOrder: p.onOrder, coverDays: p.coverDays }).summary}
                       </td>
                     </tr>

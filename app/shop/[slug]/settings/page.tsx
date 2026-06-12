@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useIsOwner } from "@/lib/auth/role-context";
 import { apiFetch } from "@/lib/api-fetch";
 
 type ShopInfo = {
@@ -15,6 +16,7 @@ type ShopInfo = {
 
 export default function SettingsPage() {
   const { slug } = useParams<{ slug: string }>();
+  const owner = useIsOwner(); // Settings are OWNER-only (Dave §7)
   const [shop, setShop] = useState<ShopInfo>(null);
   // Start empty — multi-tenant: never seed one shop's identity as the default.
   // load() fills these from GET /api/shop for the resolved tenant.
@@ -91,6 +93,17 @@ export default function SettingsPage() {
     } finally {
       setForecasting(false);
     }
+  }
+
+  if (!owner) {
+    return (
+      <main className="min-h-screen bg-canvas">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 py-16 text-center">
+          <h1 className="text-xl font-semibold tracking-tight">Owners only</h1>
+          <p className="text-sm text-mute mt-2">Settings are visible to shop owners. Ask an owner for access.</p>
+        </div>
+      </main>
+    );
   }
 
   return (

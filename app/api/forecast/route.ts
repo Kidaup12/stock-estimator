@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
 import { latestForecastRunId } from "@/lib/forecast/latest-run";
 import { coverDaysFor } from "@/lib/forecast/category";
+import { redactMoney } from "@/lib/auth/money-visibility";
 
 export async function GET() {
   const auth = await requireTenantOrResponse();
@@ -96,7 +97,7 @@ export async function GET() {
   }
   const grossMargin30 = revenue30 > 0 ? (revenue30 - cogs30) / revenue30 : 0;
 
-  return NextResponse.json({
+  return NextResponse.json(redactMoney({
     summary: {
       productCount: predictions.length,
       revenue30,
@@ -167,5 +168,5 @@ export async function GET() {
         reorderRevenueKes: p.recommendedQty * p.product.priceKes,
       };
     }),
-  });
+  }, auth.membership.role));
 }

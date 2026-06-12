@@ -24,8 +24,11 @@ type ReportsData = {
   totalStockRetail: number;
 };
 
-const KES = (n: number) => n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
-const KESshort = (n: number) => {
+// null → "—": server nulls cost/at-cost figures for non-OWNER (Dave §7).
+const KES = (n: number | null | undefined) =>
+  n == null ? "—" : n.toLocaleString("en-KE", { maximumFractionDigits: 0 });
+const KESshort = (n: number | null | undefined) => {
+  if (n == null) return "—";
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return n.toFixed(0);

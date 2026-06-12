@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantOrResponse } from "@/lib/auth/route-wrapper";
+import { canSeeMoney } from "@/lib/auth/money-visibility";
 import { z } from "zod";
 
 const schema = z.object({
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   const auth = await requireTenantOrResponse();
   if (auth instanceof NextResponse) return auth;
   const { tenant } = auth;
+  // Demand-shock surfaces cost/margin — OWNER only (Dave DoD §7).
+  if (!canSeeMoney(auth.membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Pull all predictions + products in scope
   const predictions = await prisma.prediction.findMany({
