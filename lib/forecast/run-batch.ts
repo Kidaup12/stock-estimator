@@ -15,6 +15,7 @@ import {
 import { assignAbc } from "@/lib/forecast/abc";
 import { recommendedQty as computeRecommendedQty } from "@/lib/forecast/reorder";
 import { leadDaysFor, coverDaysFor } from "@/lib/forecast/category";
+import { excludePromoDays, windowsForProduct, type PromoWindow } from "@/lib/forecast/promo-windows";
 import { tenantDayKey, tenantTodayUtc } from "@/lib/time/tenant-date";
 import { snapshotInventory } from "@/lib/inventory/snapshot";
 import { forecastDemandViaSidecar } from "@/lib/forecast/sidecar-client";
@@ -73,6 +74,17 @@ export async function runForecastsForTenant(
     scopeValue: p.scopeValue,
   }));
 
+  // Past promo windows overlapping the history range — used to scrub spike days
+  // from the baseline run rate (Dave §6). Gated by EXCLUDE_PROMO_SPIKES so the
+  // change can be walk-forward-backtested before it goes live (project rule:
+  // never flip forecast behavior without a winning backtest).
+  const excludeSpikes = process.env.EXCLUDE_PROMO_SPIKES === "1";
+  const pastPromoWindows: PromoWindow[] = excludeSpikes
+    ? (await prisma.promo.findMany({ where: { tenantId, startDate: { lte: today }, endDate: { gte: since } } })).map(
+        (p) => ({ start: p.startDate, end: p.endDate, scope: p.scope, scopeValue: p.scopeValue })
+      )
+    : [];
+
   // Build the forecast input for every product (same order as `products`).
   const inputs: ForecastInput[] = products.map((p) => ({
     productId: p.id,
@@ -81,7 +93,12 @@ export async function runForecastsForTenant(
     sku: p.sku,
     currentStock: p.currentStock,
     abcCategory: abcMap[p.id] ?? "C",
-    history: historyByProduct.get(p.id) ?? [],
+    history: excludeSpikes
+      ? excludePromoDays(
+          historyByProduct.get(p.id) ?? [],
+          windowsForProduct(pastPromoWindows, { sku: p.sku, productType: p.productType, vendor: p.vendor })
+        )
+      : historyByProduct.get(p.id) ?? [],
     // Precedence: per-product override → supplier → import-category default → 30.
     leadTimeAvg: leadDaysFor(p, p.supplier),
     leadTimeStd: p.supplier?.leadTimeStdDays ?? 7,
