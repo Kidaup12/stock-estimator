@@ -155,6 +155,8 @@ export default function SettingsPage() {
             )}
           </Section>
 
+          <OdooConnectionCard slug={slug} />
+
           <UsersSection slug={slug} />
 
           <Section
@@ -180,6 +182,83 @@ export default function SettingsPage() {
         {loading && <div className="text-center text-mute text-sm mt-6">Loading…</div>}
       </div>
     </main>
+  );
+}
+
+/** Connect an Odoo Online store (Plan 2). OWNER-only (this page is already gated). */
+function OdooConnectionCard({ slug }: { slug: string }) {
+  const [f, setF] = useState({ baseUrl: "", database: "", username: "", apiKey: "" });
+  const [connected, setConnected] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  async function load() {
+    const r = await apiFetch(slug, "/api/odoo").then(x => (x.ok ? x.json() : null)).catch(() => null);
+    if (r) {
+      setConnected(r.connected);
+      setHasKey(r.hasApiKey);
+      setLastSyncedAt(r.lastSyncedAt);
+      setF(s => ({ ...s, baseUrl: r.baseUrl, database: r.database, username: r.username }));
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function test() {
+    setTesting(true); setResult(null);
+    try {
+      const res = await apiFetch(slug, "/api/odoo/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) });
+      const d = await res.json();
+      setResult(d.ok ? { ok: true, message: `Connected to Odoo (uid ${d.uid}).` } : { ok: false, message: d.error || "Failed" });
+    } catch (e) { setResult({ ok: false, message: e instanceof Error ? e.message : "Network error" }); } finally { setTesting(false); }
+  }
+  async function save() {
+    setSaving(true); setResult(null);
+    try {
+      const res = await apiFetch(slug, "/api/odoo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(f) });
+      const d = await res.json();
+      if (!res.ok) { setResult({ ok: false, message: d.error || "Failed" }); return; }
+      setResult({ ok: true, message: "Saved." });
+      setF(s => ({ ...s, apiKey: "" }));
+      await load();
+    } catch (e) { setResult({ ok: false, message: e instanceof Error ? e.message : "Network error" }); } finally { setSaving(false); }
+  }
+  async function sync() {
+    setSyncing(true); setResult(null);
+    try {
+      const res = await apiFetch(slug, "/api/odoo/sync", { method: "POST" });
+      const d = await res.json();
+      setResult(d.ok
+        ? { ok: true, message: `Synced ${d.ingest?.products ?? 0} products, ${d.forecastsCreated ?? 0} forecasts (sales source: ${d.ingest?.salesSource ?? "?"}).` }
+        : { ok: false, message: d.error || "Sync failed" });
+      await load();
+    } catch (e) { setResult({ ok: false, message: e instanceof Error ? e.message : "Network error" }); } finally { setSyncing(false); }
+  }
+
+  const ready = !!f.baseUrl && !!f.database && !!f.username;
+  return (
+    <Section title="Odoo connection" description="Connect an Odoo Online store. Wezesha pulls products, stock, cost, sales and suppliers via Odoo's API (read-only).">
+      <div className="grid gap-4">
+        <Field label="Instance URL" value={f.baseUrl} onChange={v => setF({ ...f, baseUrl: v })} placeholder="https://yourstore.odoo.com" />
+        <Field label="Database name" value={f.database} onChange={v => setF({ ...f, database: v })} placeholder="yourstore" />
+        <Field label="Username (login email)" value={f.username} onChange={v => setF({ ...f, username: v })} placeholder="owner@yourstore.com" />
+        <Field label={hasKey ? "API key (leave blank to keep saved)" : "API key"} value={f.apiKey} onChange={v => setF({ ...f, apiKey: v })} placeholder="Odoo → My Profile → Account Security → New API Key" type="password" />
+      </div>
+      {result && <ResultBanner ok={result.ok} message={result.message} />}
+      <div className="mt-5 flex gap-2 flex-wrap">
+        <button onClick={test} disabled={testing || !ready} className="btn-ghost disabled:opacity-50">{testing ? "Testing…" : "Test connection"}</button>
+        <button onClick={save} disabled={saving || !ready} className="btn-accent disabled:bg-mute disabled:hover:bg-mute">{saving ? "Saving…" : connected ? "Update" : "Save"}</button>
+        {connected && <button onClick={sync} disabled={syncing} className="btn-ghost disabled:opacity-50">{syncing ? "Syncing…" : "Sync now"}</button>}
+      </div>
+      {connected && (
+        <div className="mt-4 text-2xs text-mute">
+          Connected · <span className="num text-ink-soft">{f.database}</span> · last synced {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "never"}
+        </div>
+      )}
+    </Section>
   );
 }
 
