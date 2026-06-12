@@ -49,7 +49,7 @@ async function main() {
     prisma.product.findMany({ where: { tenantId }, select: { id: true, shopifyProductId: true } })
   );
   const idByGid = new Map<string, string>();
-  for (const p of products) idByGid.set(p.shopifyProductId, p.id);
+  for (const p of products) idByGid.set(p.shopifyProductId!, p.id);
 
   const orders = JSON.parse(fs.readFileSync(CACHE, "utf8")).orders as ShopifyOrderNode[];
 

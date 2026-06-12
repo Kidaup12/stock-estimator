@@ -31,7 +31,7 @@ async function main() {
     where: { tenantId: tenant.id },
     select: { id: true, shopifyProductId: true },
   });
-  const idByGid = new Map(products.map((p) => [p.shopifyProductId, p.id]));
+  const idByGid = new Map(products.map((p) => [p.shopifyProductId!, p.id]));
 
   console.log(`Bulk-pulling ${days}d of orders from ${shopDomain}…`);
   const jsonl = await runBulkQuery(shopDomain, ordersBulkQuery(days));
