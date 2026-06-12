@@ -104,6 +104,8 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
         </div>
       </nav>
 
+      <SyncStatus />
+
       <div className="px-4 py-3.5 border-t border-line/70 flex items-center justify-between gap-2">
         <span className="text-2xs text-mute font-mono truncate px-2 py-1 rounded-md bg-canvas-tint border border-line">{slug}</span>
         <form action="/auth/signout" method="post">
@@ -118,6 +120,53 @@ function RailContent({ slug, pathname }: { slug: string; pathname: string }) {
       </div>
     </>
   );
+}
+
+/**
+ * "Synced X min ago" badge (Dave DoD §1). Polls /api/shop/status every 60s.
+ * Amber when stale (> 2h since last product sync); muted otherwise.
+ */
+function SyncStatus() {
+  const [lastSyncAt, setLastSyncAt] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch("/api/shop/status")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setLastSyncAt(d?.shopify?.lastSyncAt ?? null); })
+        .catch(() => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  if (lastSyncAt === undefined) return null; // not loaded yet
+  const { label, stale } = formatSync(lastSyncAt);
+  return (
+    <div className="px-4 pb-2.5">
+      <span
+        className={`inline-flex items-center gap-1.5 text-2xs ${stale ? "text-status-warn" : "text-mute"}`}
+        title="Last Shopify sync"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function formatSync(iso: string | null): { label: string; stale: boolean } {
+  if (!iso) return { label: "Never synced", stale: true };
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  let rel: string;
+  if (min < 1) rel = "just now";
+  else if (min < 60) rel = `${min}m ago`;
+  else {
+    const h = Math.floor(min / 60);
+    rel = h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+  }
+  return { label: `Synced ${rel}`, stale: ms > 2 * 60 * 60 * 1000 };
 }
 
 function RailLink({ href, label, icon, active }: { href: string; label: string; icon: ReactNode; active: boolean }) {
