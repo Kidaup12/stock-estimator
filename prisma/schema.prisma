@@ -33,6 +33,7 @@ model Tenant {
   inventorySnapshots InventorySnapshot[]
   purchaseOrders     PurchaseOrder[]
   qbSyncRuns         QbSyncRun[]
+  posSales           PosSale[]
 }
 
 model QbSyncRun {
@@ -47,6 +48,50 @@ model QbSyncRun {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, at])
+}
+
+/** Raw Dellwest POS sale (physical shop). Powers run-rate (via SalesHistory channel="pos")
+ *  and the later who-sold/warehouse audit. Online ("SHOPIFY") sales are filtered out
+ *  upstream — they already arrive via the Shopify sync. */
+model PosSale {
+  id            String   @id @default(cuid())
+  tenantId      String
+  externalId    String   // Dellwest sale id
+  reference     String?
+  date          DateTime
+  createdBy     String   // staff name (physical); "SHOPIFY" rows are excluded upstream
+  salesAgent    String?
+  warehouse     String?
+  customer      String?
+  saleStatus    String?
+  paymentStatus String?
+  grandTotal    Float    @default(0)
+  channel       String   @default("physical")
+  createdAt     DateTime @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  PosSaleLine[]
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId, date])
+}
+
+model PosSaleLine {
+  id          String  @id @default(cuid())
+  posSaleId   String
+  tenantId    String
+  sku         String
+  productName String
+  qty         Float   @default(0)
+  price       Float   @default(0)
+  subtotal    Float   @default(0)
+  productId   String? // matched Wezesha product (by SKU); null = unmatched Dellwest code
+
+  posSale PosSale  @relation(fields: [posSaleId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productId])
+  @@index([posSaleId])
 }
 
 model Membership {
@@ -97,6 +142,7 @@ model Product {
   inventoryLevels    InventoryLevel[]
   inventorySnapshots InventorySnapshot[]
   purchaseOrderLines PurchaseOrderLine[]
+  posSaleLines       PosSaleLine[]
 
   @@unique([tenantId, shopifyProductId])
   @@unique([tenantId, source, externalId])
